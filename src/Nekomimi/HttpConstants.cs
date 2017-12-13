@@ -73,6 +73,20 @@ namespace Sakuno.Nekomimi
             }
         }
 
+        public static byte[] FromVersion(HttpVersion version)
+        {
+            switch (version)
+            {
+                case HttpVersion.Version10:
+                    return Versions.Version10;
+
+                case HttpVersion.Version11:
+                    return Versions.Version11;
+
+                default: throw new ArgumentOutOfRangeException(nameof(version));
+            }
+        }
+
         public static byte[] FromHeaderName(string name) =>
             Headers.NameCache.GetOrAdd(name, Encoding.ASCII.GetBytes);
     }
