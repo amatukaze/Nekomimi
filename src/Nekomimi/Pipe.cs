@@ -1,4 +1,5 @@
 ﻿using Sakuno.Net;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Text;
@@ -9,6 +10,7 @@ namespace Sakuno.Nekomimi
     class Pipe
     {
         static ConcurrentQueue<SocketAsyncOperationContext> _operations;
+        static ArrayPool<byte> _bufferPool = ArrayPool<byte>.Create();
 
         public Socket Socket { get; }
 
@@ -34,7 +36,7 @@ namespace Sakuno.Nekomimi
 
             Operation = operation;
 
-            Buffer = new byte[4096];
+            Buffer = _bufferPool.Rent(4096);
 
             Stream = new PipeStream(this);
         }
@@ -131,6 +133,7 @@ namespace Sakuno.Nekomimi
             Operation.SetBuffer(0, 0);
 
             _operations.Enqueue(Operation);
+            _bufferPool.Return(Buffer);
         }
     }
 }
