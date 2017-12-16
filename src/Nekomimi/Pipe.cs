@@ -1,5 +1,4 @@
 ﻿using Sakuno.Net;
-using System;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Text;
@@ -9,7 +8,7 @@ namespace Sakuno.Nekomimi
 {
     class Pipe
     {
-        static ConcurrentStack<SocketAsyncOperationContext> _operations;
+        static ConcurrentQueue<SocketAsyncOperationContext> _operations;
 
         public Socket Socket { get; }
 
@@ -21,16 +20,16 @@ namespace Sakuno.Nekomimi
 
         static Pipe()
         {
-            _operations = new ConcurrentStack<SocketAsyncOperationContext>();
+            _operations = new ConcurrentQueue<SocketAsyncOperationContext>();
 
             for (var i = 0; i < 5; i++)
-                _operations.Push(new SocketAsyncOperationContext());
+                _operations.Enqueue(new SocketAsyncOperationContext());
         }
         public Pipe(Socket socket)
         {
             Socket = socket;
 
-            if (!_operations.TryPop(out var operation))
+            if (!_operations.TryDequeue(out var operation))
                 operation = new SocketAsyncOperationContext();
 
             Operation = operation;
@@ -131,7 +130,7 @@ namespace Sakuno.Nekomimi
 
             Operation.SetBuffer(0, 0);
 
-            _operations.Push(Operation);
+            _operations.Enqueue(Operation);
         }
     }
 }
