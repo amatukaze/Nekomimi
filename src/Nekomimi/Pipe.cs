@@ -12,6 +12,9 @@ namespace Sakuno.Nekomimi
         static ConcurrentQueue<SocketAsyncOperationContext> _operations;
         static ArrayPool<byte> _bufferPool = ArrayPool<byte>.Create();
 
+        private byte? _peekedByte;
+        private int _readPosition, _readBufferLength;
+
         public Socket Socket { get; }
 
         public SocketAsyncOperationContext Operation { get; }
@@ -39,6 +42,45 @@ namespace Sakuno.Nekomimi
             Buffer = _bufferPool.Rent(4096);
 
             Stream = new PipeStream(this);
+        }
+
+        public byte ReadByte()
+        {
+            if (_peekedByte != null)
+            {
+                byte result = _peekedByte.Value;
+                _peekedByte = null;
+                return result;
+            }
+            else
+            {
+                Advance();
+                return Buffer[_readPosition];
+            }
+        }
+
+        public byte PeekByte()
+        {
+            if (_peekedByte == null)
+            {
+                Advance();
+                _peekedByte = Buffer[_readPosition];
+            }
+            return _peekedByte.Value;
+        }
+
+        public void Advance()
+        {
+            if (++_readPosition >= _readBufferLength)
+            {
+                FillBuffer();
+                _readPosition = 0;
+            }
+        }
+
+        public void FillBuffer()
+        {
+            _readBufferLength = Stream.Read(Buffer, 0, Buffer.Length);
         }
 
         public Task SendASCII(string content)

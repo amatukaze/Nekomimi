@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net.Sockets;
 using System.Text;
 
 namespace Sakuno.Nekomimi
@@ -27,49 +26,6 @@ namespace Sakuno.Nekomimi
             _pipe = pipe;
 
             _stringBuilder = new StringBuilder();
-        }
-
-        byte ReadByte()
-        {
-            _singleByte = null;
-
-            Advance();
-
-            return CurrentByte;
-        }
-        byte PeekByte()
-        {
-            if (_singleByte != null)
-                return _pipe.Buffer[0];
-
-            if (_currentPosition + 1 < _length)
-                return _pipe.Buffer[_currentPosition + 1];
-
-            _singleByte = CurrentByte;
-
-            Advance();
-
-            return _pipe.Buffer[0];
-        }
-        void Advance()
-        {
-            if (_currentPosition < _length)
-                _currentPosition++;
-            else
-            {
-                FillBuffer();
-
-                _currentPosition = 0;
-                _length = _pipe.Operation.BytesTransferred;
-            }
-        }
-
-        void FillBuffer()
-        {
-            _pipe.Stream.ReadAsync(_pipe.Buffer, 0, _pipe.Buffer.Length).WaitAndUnwarp();
-
-            if (_pipe.Operation.LastError != SocketError.Success)
-                throw new SocketException((int)_pipe.Operation.LastError);
         }
 
         public void ParseRequest()
@@ -108,7 +64,7 @@ namespace Sakuno.Nekomimi
             if (!int.TryParse(lengthStr, out var length))
                 throw new FormatException();
 
-            Advance();
+            _pipe.Advance();
 
             _session.RequestBody = ReadBody(length);
         }
@@ -139,7 +95,7 @@ namespace Sakuno.Nekomimi
                 if (!int.TryParse(lengthStr, out var length))
                     throw new FormatException();
 
-                Advance();
+                _pipe.Advance();
 
                 _session.ResponseBody = ReadBody(length);
             }
@@ -166,7 +122,7 @@ namespace Sakuno.Nekomimi
 
                 if (remaining > 0 && _currentPosition == _length)
                 {
-                    FillBuffer();
+                    _pipe.FillBuffer();
 
                     _currentPosition = 0;
                     _length = _pipe.Operation.BytesTransferred;
@@ -193,7 +149,7 @@ namespace Sakuno.Nekomimi
                     return buffer.ToArray();
                 }
 
-                Advance();
+                _pipe.Advance();
 
                 var remaining = chunkSize;
 
@@ -208,7 +164,7 @@ namespace Sakuno.Nekomimi
 
                     if (remaining > 0 && _currentPosition == _length)
                     {
-                        FillBuffer();
+                        _pipe.FillBuffer();
 
                         _currentPosition = 0;
                         _length = _pipe.Operation.BytesTransferred;
@@ -224,7 +180,7 @@ namespace Sakuno.Nekomimi
 
         HttpMethod ReadHttpMethod()
         {
-            switch (ReadByte())
+            switch (_pipe.ReadByte())
             {
                 case (byte)'G':
                 case (byte)'g':
@@ -284,7 +240,7 @@ namespace Sakuno.Nekomimi
 
                 case (byte)'P':
                 case (byte)'p':
-                    switch (ReadByte())
+                    switch (_pipe.ReadByte())
                     {
                         case (byte)'O':
                         case (byte)'o':
@@ -314,7 +270,7 @@ namespace Sakuno.Nekomimi
         }
         void AssertLetter(byte b)
         {
-            var current = ReadByte();
+            var current = _pipe.ReadByte();
 
             if (current == b)
                 return;
@@ -327,7 +283,7 @@ namespace Sakuno.Nekomimi
 
         void AssertChar(char c)
         {
-            if (ReadByte() != c)
+            if (_pipe.ReadByte() != c)
                 throw new FormatException("Expect " + c);
         }
 
@@ -343,13 +299,13 @@ namespace Sakuno.Nekomimi
 
             while (true)
             {
-                var b = PeekByte();
+                var b = _pipe.PeekByte();
                 if (b == ' ')
                     return builder.ToString();
 
                 builder.Append((char)b);
 
-                Advance();
+                _pipe.Advance();
             }
         }
         string ReadUntilNewLine(StringBuilder builder)
@@ -358,13 +314,13 @@ namespace Sakuno.Nekomimi
 
             while (true)
             {
-                var b = PeekByte();
+                var b = _pipe.PeekByte();
                 if (b == '\r')
                     return builder.ToString();
 
                 builder.Append((char)b);
 
-                Advance();
+                _pipe.Advance();
             }
         }
 
@@ -376,14 +332,14 @@ namespace Sakuno.Nekomimi
             AssertChar('P');
             AssertChar('/');
 
-            var major = ReadByte();
+            var major = _pipe.ReadByte();
             AssertDigit(major);
 
             major -= (byte)'0';
 
             AssertChar('.');
 
-            var minor = ReadByte();
+            var minor = _pipe.ReadByte();
             AssertDigit(minor);
 
             minor -= (byte)'0';
@@ -404,42 +360,42 @@ namespace Sakuno.Nekomimi
 
             while (true)
             {
-                if (PeekByte() == '\r')
+                if (_pipe.PeekByte() == '\r')
                     break;
 
                 builder.Clear();
 
                 while (true)
                 {
-                    var b = PeekByte();
+                    var b = _pipe.PeekByte();
                     if (!IsLetter(b) && b != '-')
                         break;
 
                     builder.Append((char)b);
 
-                    Advance();
+                    _pipe.Advance();
                 }
 
                 AssertChar(':');
 
                 var key = string.Intern(builder.ToString());
 
-                if (PeekByte() == ' ')
+                if (_pipe.PeekByte() == ' ')
                 {
-                    Advance();
+                    _pipe.Advance();
                 }
 
                 builder.Clear();
 
                 while (true)
                 {
-                    var b = PeekByte();
+                    var b = _pipe.PeekByte();
                     if (b == '\r')
                         break;
 
                     builder.Append((char)b);
 
-                    Advance();
+                    _pipe.Advance();
                 }
 
                 AssertNewline();
@@ -460,13 +416,13 @@ namespace Sakuno.Nekomimi
 
             while (true)
             {
-                var b = PeekByte();
+                var b = _pipe.PeekByte();
                 if (!IsDigit(b))
                     return result;
 
                 result = result * 10 + b - '0';
 
-                Advance();
+                _pipe.Advance();
             }
         }
 
@@ -476,7 +432,7 @@ namespace Sakuno.Nekomimi
 
             while (true)
             {
-                var b = PeekByte();
+                var b = _pipe.PeekByte();
                 if (!IsCharInHexadecimal(b))
                     return result;
 
@@ -489,7 +445,7 @@ namespace Sakuno.Nekomimi
                 else
                     result += b - 'A' + 10;
 
-                Advance();
+                _pipe.Advance();
             }
         }
         bool IsCharInHexadecimal(byte b) => b >= '0' && b <= '9' || (b >= 'A' && b <= 'F') || (b >= 'a' && b <= 'f');
