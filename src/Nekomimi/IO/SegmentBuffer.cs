@@ -15,16 +15,21 @@ namespace Sakuno.Nekomimi.IO
         private readonly List<ArraySegment<byte>> _buffers = new List<ArraySegment<byte>>();
         private readonly Stream _stream;
         private bool _endOfStream;
-        public long? Length { get; }
+        public long? Length { get; private set; }
+        private long _bufferedLength;
 
         private readonly SemaphoreSlim _streamLock = new SemaphoreSlim(0, 1);
         private readonly ReaderWriterLockSlim _listLock = new ReaderWriterLockSlim();
 
-        public SegmentBuffer(Stream stream, ArraySegment<byte> usedBuffer, long? length)
+        public SegmentBuffer(Stream stream, ArraySegment<byte> usedBuffer = default, long? length = null)
         {
             _stream = stream;
             Length = length;
-            _buffers.Add(usedBuffer);
+            if (usedBuffer != default)
+            {
+                _bufferedLength = usedBuffer.Count;
+                _buffers.Add(usedBuffer);
+            }
         }
 
         protected override void DisposeNativeResources()
@@ -34,63 +39,56 @@ namespace Sakuno.Nekomimi.IO
                 BufferPool.Return(buffer.Array);
         }
 
-        public async ValueTask<int> Read(long position, byte[] buffer, int offset, int count)
+        public int SegmentCount
         {
-            ThrowIfDisposed();
-            long pos = 0;
-            int bytesRead = 0;
-            int i = 0;
-            while (i < _buffers.Count)
+            get
             {
+                ThrowIfDisposed();
+                return _buffers.Count;
+            }
+        }
+
+        public ArraySegment<byte> this[int index]
+        {
+            get
+            {
+                ThrowIfDisposed();
                 _listLock.EnterReadLock();
-                var segment = _buffers[i];
+                var segment = _buffers[index];
                 _listLock.ExitReadLock();
-                if (segment.Count + pos >= position)
+                return segment;
+            }
+        }
+
+        public async ValueTask<int> CheckNewSegmentAsync(int oldCount)
+        {
+            if (_buffers.Count > oldCount || _endOfStream) return _buffers.Count;
+            await _streamLock.WaitAsync();
+            try
+            {
+                if (_buffers.Count == oldCount && !_endOfStream)
                 {
-                    int start = position > pos ? (int)(position - pos) : 0;
-                    int available = segment.Count - start;
-                    if (count <= available)
+                    var newBuffer = BufferPool.Rent(BufferSize);
+                    int bytesFromStream = await _stream.ReadAsync(newBuffer, 0, newBuffer.Length);
+                    if (bytesFromStream > 0)
                     {
-                        bytesRead += count;
-                        Buffer.BlockCopy(segment.Array, segment.Offset + start, buffer, offset, count);
-                        return bytesRead;
+                        _listLock.EnterWriteLock();
+                        _buffers.Add(new ArraySegment<byte>(newBuffer, 0, bytesFromStream));
+                        _bufferedLength += bytesFromStream;
+                        _listLock.ExitWriteLock();
                     }
                     else
                     {
-                        bytesRead += available;
-                        Buffer.BlockCopy(segment.Array, segment.Offset + start, buffer, offset, available);
-                        position += available;
-                        offset += available;
-                        count -= available;
+                        _endOfStream = true;
+                        Length = _bufferedLength;
                     }
                 }
-                if (++i == _buffers.Count && !_endOfStream)
-                {
-                    await _streamLock.WaitAsync();
-                    try
-                    {
-                        if (_endOfStream) break;
-                        if (i == _buffers.Count)
-                        {
-                            var newBuffer = BufferPool.Rent(BufferSize);
-                            int bytesFromStream = await _stream.ReadAsync(newBuffer, 0, newBuffer.Length);
-                            if (bytesFromStream > 0)
-                            {
-                                _listLock.EnterWriteLock();
-                                _buffers.Add(new ArraySegment<byte>(newBuffer, 0, bytesFromStream));
-                                _listLock.ExitWriteLock();
-                            }
-                            else
-                                _endOfStream = true;
-                        }
-                    }
-                    finally
-                    {
-                        _streamLock.Release();
-                    }
-                }
+                return _buffers.Count;
             }
-            return bytesRead;
+            finally
+            {
+                _streamLock.Release();
+            }
         }
     }
 }
