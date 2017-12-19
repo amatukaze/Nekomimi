@@ -14,8 +14,8 @@ namespace Sakuno.Nekomimi
     {
         static ConcurrentQueue<SocketAsyncOperationContext> _operations;
 
-        private byte? _peekedByte;
         private int _readPosition, _readBufferLength;
+        private bool _endOfStream;
 
         public Socket Socket { get; }
 
@@ -48,41 +48,32 @@ namespace Sakuno.Nekomimi
 
         public byte ReadByte()
         {
-            if (_peekedByte != null)
-            {
-                byte result = _peekedByte.Value;
-                _peekedByte = null;
-                return result;
-            }
-            else
-            {
-                Advance();
-                return _buffer[_readPosition];
-            }
+            byte result = PeekByte();
+            Advance();
+            return result;
         }
 
         public byte PeekByte()
         {
-            if (_peekedByte == null)
-            {
-                Advance();
-                _peekedByte = _buffer[_readPosition];
-            }
-            return _peekedByte.Value;
+            if (_endOfStream) return 0;
+            if (_readBufferLength == 0) FillBuffer();
+            return _buffer[_readPosition];
         }
 
         public void Advance()
         {
-            if (++_readPosition >= _readBufferLength)
-            {
+            if (_endOfStream) return;
+            if (_readPosition >= _readBufferLength)
                 FillBuffer();
-                _readPosition = 0;
-            }
+            if (_readBufferLength > 0)
+                _readPosition++;
         }
 
         private void FillBuffer()
         {
-            _readBufferLength = _stream.Read(_buffer, 0, _buffer.Length);
+            if ((_readBufferLength = _stream.Read(_buffer, 0, _buffer.Length)) == 0)
+                _endOfStream = true;
+            _readPosition = 0;
         }
 
         public ValueTask<int> ReadAsync(ArraySegment<byte> buffer)
