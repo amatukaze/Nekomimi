@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Text;
+using System.Threading.Tasks;
+using Sakuno.Nekomimi.IO;
 
 namespace Sakuno.Nekomimi
 {
@@ -10,12 +11,6 @@ namespace Sakuno.Nekomimi
         Session _session;
 
         Pipe _pipe;
-
-        int _length, _currentPosition;
-
-        byte? _singleByte;
-
-        public byte CurrentByte => _singleByte == null ? _pipe.Buffer[_currentPosition] : _singleByte.Value;
 
         StringBuilder _stringBuilder;
 
@@ -61,12 +56,10 @@ namespace Sakuno.Nekomimi
             if (!_session.RequestHeaders.TryGetValue("Content-Length", out var lengthStr))
                 return;
 
-            if (!int.TryParse(lengthStr, out var length))
+            if (!long.TryParse(lengthStr, out var length))
                 throw new FormatException();
 
-            _pipe.Advance();
-
-            _session.RequestBody = ReadBody(length);
+            _session.RequestBodyBuffer = new SegmentBuffer(_pipe, length);
         }
 
         public void ParseResponse()
@@ -92,90 +85,14 @@ namespace Sakuno.Nekomimi
         {
             if (_session.ResponseHeaders.TryGetValue("Content-Length", out var lengthStr))
             {
-                if (!int.TryParse(lengthStr, out var length))
+                if (!long.TryParse(lengthStr, out var length))
                     throw new FormatException();
 
-                _pipe.Advance();
-
-                _session.ResponseBody = ReadBody(length);
+                _session.ResponseBodyBuffer = new SegmentBuffer(_pipe, length);
             }
 
             if (_session.ResponseHeaders.TryGetValue("Transfer-Encoding", out var encoding) && encoding.OICContains("chunked"))
-                _session.ResponseBody = ReadBodyChunks();
-        }
-
-        byte[] ReadBody(int length)
-        {
-            var buffer = new byte[length];
-            var remaining = length;
-            var offset = 0;
-
-            while (remaining > 0)
-            {
-                var size = Math.Min(remaining, _length - _currentPosition);
-
-                Buffer.BlockCopy(_pipe.Buffer, _currentPosition, buffer, offset, size);
-
-                _currentPosition += size;
-                remaining -= size;
-                offset += size;
-
-                if (remaining > 0 && _currentPosition == _length)
-                {
-                    _pipe.FillBuffer();
-
-                    _currentPosition = 0;
-                    _length = _pipe.Operation.BytesTransferred;
-                }
-            }
-
-            return buffer;
-        }
-
-        byte[] ReadBodyChunks()
-        {
-            var buffer = new MemoryStream();
-
-            while (true)
-            {
-                var chunkSize = ReadHexadecimal();
-
-                AssertNewline();
-
-                if (chunkSize == 0)
-                {
-                    AssertNewline();
-
-                    return buffer.ToArray();
-                }
-
-                _pipe.Advance();
-
-                var remaining = chunkSize;
-
-                while (remaining > 0)
-                {
-                    var size = Math.Min(remaining, _length - _currentPosition);
-
-                    buffer.Write(_pipe.Buffer, _currentPosition, size);
-
-                    _currentPosition += size;
-                    remaining -= size;
-
-                    if (remaining > 0 && _currentPosition == _length)
-                    {
-                        _pipe.FillBuffer();
-
-                        _currentPosition = 0;
-                        _length = _pipe.Operation.BytesTransferred;
-                    }
-                }
-
-                if (CurrentByte != '\r')
-                    throw new FormatException("Expect 0x0D");
-
-                AssertChar('\n');
-            }
+                _session.ResponseBodyBuffer = new SegmentBuffer(new ChunkedStream(this));
         }
 
         HttpMethod ReadHttpMethod()
@@ -449,5 +366,47 @@ namespace Sakuno.Nekomimi
             }
         }
         bool IsCharInHexadecimal(byte b) => b >= '0' && b <= '9' || (b >= 'A' && b <= 'F') || (b >= 'a' && b <= 'f');
+
+        internal sealed class ChunkedStream : IStreamWrapper
+        {
+            private readonly HttpParser _parser;
+
+            public ChunkedStream(HttpParser parser)
+            {
+                _parser = parser;
+            }
+
+            private int _chunkSize;
+            private bool _endOfStream;
+            public async ValueTask<int> ReadAsync(ArraySegment<byte> buffer)
+            {
+                if (_endOfStream) return 0;
+                if (_chunkSize == 0)
+                {
+                    _chunkSize = _parser.ReadHexadecimal();
+                    _parser.AssertNewline();
+                    if (_chunkSize == 0)
+                    {
+                        _parser.AssertNewline();
+                        _endOfStream = true;
+                        return 0;
+                    }
+                    _parser._pipe.Advance();
+                }
+                if (buffer.Count >= _chunkSize)
+                {
+                    int result = await _parser._pipe.ReadAsync(new ArraySegment<byte>(buffer.Array, buffer.Offset, _chunkSize));
+                    _chunkSize = 0;
+                    _parser.AssertNewline();
+                    return result;
+                }
+                else
+                {
+                    int result = await _parser._pipe.ReadAsync(buffer);
+                    _chunkSize -= result;
+                    return result;
+                }
+            }
+        }
     }
 }

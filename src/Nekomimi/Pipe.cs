@@ -1,16 +1,16 @@
-﻿using Sakuno.Net;
+﻿using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using Sakuno.Net;
 
 namespace Sakuno.Nekomimi
 {
-    class Pipe
+    internal class Pipe : IStreamWrapper
     {
         static ConcurrentQueue<SocketAsyncOperationContext> _operations;
-        static ArrayPool<byte> _bufferPool = ArrayPool<byte>.Create();
 
         private byte? _peekedByte;
         private int _readPosition, _readBufferLength;
@@ -19,9 +19,9 @@ namespace Sakuno.Nekomimi
 
         public SocketAsyncOperationContext Operation { get; }
 
-        public byte[] Buffer { get; }
+        private byte[] _buffer;
 
-        public PipeStream Stream { get; }
+        private PipeStream _stream;
 
         static Pipe()
         {
@@ -39,9 +39,9 @@ namespace Sakuno.Nekomimi
 
             Operation = operation;
 
-            Buffer = _bufferPool.Rent(4096);
+            _buffer = ArrayPool<byte>.Shared.Rent(4096);
 
-            Stream = new PipeStream(this);
+            _stream = new PipeStream(this);
         }
 
         public byte ReadByte()
@@ -55,7 +55,7 @@ namespace Sakuno.Nekomimi
             else
             {
                 Advance();
-                return Buffer[_readPosition];
+                return _buffer[_readPosition];
             }
         }
 
@@ -64,7 +64,7 @@ namespace Sakuno.Nekomimi
             if (_peekedByte == null)
             {
                 Advance();
-                _peekedByte = Buffer[_readPosition];
+                _peekedByte = _buffer[_readPosition];
             }
             return _peekedByte.Value;
         }
@@ -78,18 +78,31 @@ namespace Sakuno.Nekomimi
             }
         }
 
-        public void FillBuffer()
+        private void FillBuffer()
         {
-            _readBufferLength = Stream.Read(Buffer, 0, Buffer.Length);
+            _readBufferLength = _stream.Read(_buffer, 0, _buffer.Length);
+        }
+
+        public ValueTask<int> ReadAsync(ArraySegment<byte> buffer)
+        {
+            if (_readPosition < _readBufferLength)
+            {
+                int count = Math.Min(buffer.Count, _readBufferLength - _readPosition);
+                Buffer.BlockCopy(_buffer, _readPosition, buffer.Array, buffer.Offset, buffer.Count);
+                _readPosition += count;
+                return new ValueTask<int>(count);
+            }
+            else
+                return new ValueTask<int>(_stream.ReadAsync(buffer.Array, buffer.Offset, buffer.Count));
         }
 
         public Task SendASCII(string content)
         {
-            var length = Encoding.ASCII.GetBytes(content, 0, content.Length, Buffer, 0);
+            var length = Encoding.ASCII.GetBytes(content, 0, content.Length, _buffer, 0);
 
-            return Stream.WriteAsync(Buffer, 0, length);
+            return _stream.WriteAsync(_buffer, 0, length);
         }
-        public Task Send(byte[] content) => Stream.WriteAsync(content, 0, content.Length);
+        public Task Send(byte[] content) => _stream.WriteAsync(content, 0, content.Length);
 
         public async Task SendRequest(Session session)
         {
@@ -175,7 +188,8 @@ namespace Sakuno.Nekomimi
             Operation.SetBuffer(0, 0);
 
             _operations.Enqueue(Operation);
-            _bufferPool.Return(Buffer);
+            if (_buffer != null)
+                ArrayPool<byte>.Shared.Return(_buffer);
         }
     }
 }

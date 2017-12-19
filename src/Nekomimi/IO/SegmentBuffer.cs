@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -9,34 +8,29 @@ namespace Sakuno.Nekomimi.IO
 {
     internal sealed class SegmentBuffer : DisposableObject
     {
-        internal static ArrayPool<byte> BufferPool { get; } = ArrayPool<byte>.Create();
         internal const int BufferSize = 4096;
 
         private readonly List<ArraySegment<byte>> _buffers = new List<ArraySegment<byte>>();
-        private readonly Stream _stream;
+        private readonly IStreamWrapper _wrapper;
         private bool _endOfStream;
+
         public long? Length { get; private set; }
         private long _bufferedLength;
 
         private readonly SemaphoreSlim _streamLock = new SemaphoreSlim(0, 1);
         private readonly ReaderWriterLockSlim _listLock = new ReaderWriterLockSlim();
 
-        public SegmentBuffer(Stream stream, ArraySegment<byte> usedBuffer = default, long? length = null)
+        public SegmentBuffer(IStreamWrapper wrapper, long? length = null)
         {
-            _stream = stream;
+            _wrapper = wrapper;
             Length = length;
-            if (usedBuffer != default)
-            {
-                _bufferedLength = usedBuffer.Count;
-                _buffers.Add(usedBuffer);
-            }
         }
 
         protected override void DisposeNativeResources()
         {
             base.DisposeNativeResources();
             foreach (var buffer in _buffers)
-                BufferPool.Return(buffer.Array);
+                ArrayPool<byte>.Shared.Return(buffer.Array);
         }
 
         public int SegmentCount
@@ -68,8 +62,11 @@ namespace Sakuno.Nekomimi.IO
             {
                 if (_buffers.Count == oldCount && !_endOfStream)
                 {
-                    var newBuffer = BufferPool.Rent(BufferSize);
-                    int bytesFromStream = await _stream.ReadAsync(newBuffer, 0, newBuffer.Length);
+                    var newBuffer = ArrayPool<byte>.Shared.Rent(BufferSize);
+                    int newLength = newBuffer.Length;
+                    if (Length - _bufferedLength < newLength)
+                        newLength = (int)(Length.Value - _bufferedLength);
+                    int bytesFromStream = await _wrapper.ReadAsync(new ArraySegment<byte>(newBuffer, 0, newLength));
                     if (bytesFromStream > 0)
                     {
                         _listLock.EnterWriteLock();

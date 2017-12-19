@@ -1,4 +1,5 @@
-﻿using Sakuno.Net;
+﻿using Sakuno.Nekomimi.IO;
+using Sakuno.Net;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -60,6 +61,7 @@ namespace Sakuno.Nekomimi
 
         public IDictionary<string, string> RequestHeaders { get; internal set; }
 
+        internal SegmentBuffer RequestBodyBuffer;
         public byte[] RequestBody { get; set; }
 
         IPEndPoint _forwardDestination;
@@ -90,6 +92,7 @@ namespace Sakuno.Nekomimi
 
         public IDictionary<string, string> ResponseHeaders { get; internal set; }
 
+        internal SegmentBuffer ResponseBodyBuffer;
         public byte[] ResponseBody { get; set; }
 
         public Session(Socket clientSocket)
