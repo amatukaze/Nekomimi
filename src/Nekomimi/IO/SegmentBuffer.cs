@@ -87,5 +87,13 @@ namespace Sakuno.Nekomimi.IO
                 _streamLock.Release();
             }
         }
+
+        public async ValueTask<long> FullFill()
+        {
+            int oldCount = _buffers.Count, newCount;
+            while ((newCount = await CheckNewSegmentAsync(oldCount)) > oldCount)
+                oldCount = newCount;
+            return _bufferedLength;
+        }
     }
 }

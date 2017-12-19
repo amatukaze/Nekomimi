@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using Sakuno.Nekomimi.IO;
 using Sakuno.Net;
 
 namespace Sakuno.Nekomimi
@@ -104,6 +106,8 @@ namespace Sakuno.Nekomimi
         }
         public Task Send(byte[] content) => _stream.WriteAsync(content, 0, content.Length);
 
+        public Task Send(Stream stream) => stream.CopyToAsync(_stream);
+
         public async Task SendRequest(Session session)
         {
             await Send(HttpConstants.FromMethod(session.Method));
@@ -131,8 +135,7 @@ namespace Sakuno.Nekomimi
 
             await Send(HttpConstants.CrLf);
 
-            if (session.RequestBody != null)
-                await Send(session.RequestBody);
+            await Send(new SegmentBufferStream(session.RequestBodyBuffer));
         }
 
         public async Task SendResponse(Session session)
@@ -161,23 +164,20 @@ namespace Sakuno.Nekomimi
 
             await Send(HttpConstants.CrLf);
 
-            if (session.ResponseBody != null)
+            if (chunkedEncoding)
             {
-                if (chunkedEncoding)
-                {
-                    await SendASCII(session.ResponseBody.Length.ToString("x"));
-                    await Send(HttpConstants.CrLf);
-                }
+                await SendASCII((await session.ResponseBodyBuffer.FullFill()).ToString("x"));
+                await Send(HttpConstants.CrLf);
+            }
 
-                await Send(session.ResponseBody);
+            await Send(new SegmentBufferStream(session.ResponseBodyBuffer));
 
-                if (chunkedEncoding)
-                {
-                    await Send(HttpConstants.CrLf);
-                    await SendASCII("0");
-                    await Send(HttpConstants.CrLf);
-                    await Send(HttpConstants.CrLf);
-                }
+            if (chunkedEncoding)
+            {
+                await Send(HttpConstants.CrLf);
+                await SendASCII("0");
+                await Send(HttpConstants.CrLf);
+                await Send(HttpConstants.CrLf);
             }
         }
 
