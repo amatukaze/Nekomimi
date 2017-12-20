@@ -90,12 +90,12 @@ namespace Sakuno.Nekomimi
                 parser.ParseResponse();
 
                 parser.ReadResponseBody();
-
-                session.ClientPipe.Close();
             }
 
             {
                 await session.ServerPipe.SendResponse(session);
+
+                session.ClientPipe.Close();
 
                 session.ServerPipe.Close();
             }

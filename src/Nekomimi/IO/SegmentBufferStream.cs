@@ -59,7 +59,7 @@ namespace Sakuno.Nekomimi.IO
                 _offset += available;
                 _count -= available;
                 _bytesRead += available;
-                Position += _count;
+                Position += available;
                 if (!await NextSegmentAsync()) break;
             }
             return _bytesRead;

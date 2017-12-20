@@ -17,13 +17,14 @@ namespace Sakuno.Nekomimi.IO
         public long? Length { get; private set; }
         private long _bufferedLength;
 
-        private readonly SemaphoreSlim _streamLock = new SemaphoreSlim(0, 1);
+        private readonly SemaphoreSlim _streamLock = new SemaphoreSlim(1);
         private readonly ReaderWriterLockSlim _listLock = new ReaderWriterLockSlim();
 
         public SegmentBuffer(IStreamWrapper wrapper, long? length = null)
         {
             _wrapper = wrapper;
             Length = length;
+            if (length == 0) _endOfStream = true;
         }
 
         protected override void DisposeNativeResources()

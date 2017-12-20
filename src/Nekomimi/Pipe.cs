@@ -81,7 +81,7 @@ namespace Sakuno.Nekomimi
             if (_readPosition < _readBufferLength)
             {
                 int count = Math.Min(buffer.Count, _readBufferLength - _readPosition);
-                Buffer.BlockCopy(_buffer, _readPosition, buffer.Array, buffer.Offset, buffer.Count);
+                Buffer.BlockCopy(_buffer, _readPosition, buffer.Array, buffer.Offset, count);
                 _readPosition += count;
                 return new ValueTask<int>(count);
             }

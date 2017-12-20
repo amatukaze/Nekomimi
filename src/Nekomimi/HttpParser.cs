@@ -54,7 +54,10 @@ namespace Sakuno.Nekomimi
         public void ReadRequestBody()
         {
             if (!_session.RequestHeaders.TryGetValue("Content-Length", out var lengthStr))
+            {
+                _session.RequestBodyBuffer = new SegmentBuffer(null, 0);
                 return;
+            }
 
             if (!long.TryParse(lengthStr, out var length))
                 throw new FormatException();
@@ -90,9 +93,9 @@ namespace Sakuno.Nekomimi
 
                 _session.ResponseBodyBuffer = new SegmentBuffer(_pipe, length);
             }
-
-            if (_session.ResponseHeaders.TryGetValue("Transfer-Encoding", out var encoding) && encoding.OICContains("chunked"))
+            else if (_session.ResponseHeaders.TryGetValue("Transfer-Encoding", out var encoding) && encoding.OICContains("chunked"))
                 _session.ResponseBodyBuffer = new SegmentBuffer(new ChunkedStream(this));
+            else _session.ResponseBodyBuffer = new SegmentBuffer(null, 0);
         }
 
         HttpMethod ReadHttpMethod()
