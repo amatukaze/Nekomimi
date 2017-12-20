@@ -8,7 +8,6 @@ namespace Sakuno.Nekomimi.IO
     internal class SegmentBufferStream : Stream
     {
         private readonly SegmentBuffer _buffer;
-        private long _position;
 
         public override bool CanRead => true;
         public override bool CanSeek => true;
@@ -28,23 +27,27 @@ namespace Sakuno.Nekomimi.IO
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
             => ReadAsync(new ArraySegment<byte>(buffer, offset, count)).AsTask();
 
-        private int _currentIndex, _currentSegmentOffset, _bytesRead, _offset, _count;
+        public async override Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
+        {
+            if (!await CheckPositionAsync()) return;
+            do
+            {
+                await destination.WriteAsync(_currentSegment.Array, _currentSegment.Offset + _currentSegmentOffset, _currentSegment.Count - _currentSegmentOffset);
+                Position += _currentSegment.Count - _currentSegmentOffset;
+            }
+            while (await NextSegmentAsync());
+        }
+
+        private int _currentIndex, _currentSegmentOffset;
         private long _currentSegmentStart;
-        private ArraySegment<byte> _currentSegment, _dest;
+        private ArraySegment<byte> _currentSegment;
         public async ValueTask<int> ReadAsync(ArraySegment<byte> buffer)
         {
-            if (_currentSegmentStart > Position)
-            {
-                _currentSegment = default;
-                _currentSegmentStart = 0;
-                _currentIndex = -1;
-            }
-            if (_currentIndex == -1 && !await NextSegmentAsync())
+            if (!await CheckPositionAsync())
                 return 0;
-            if (_currentSegment == default) return 0;
-            _bytesRead = 0;
-            _offset = buffer.Offset;
-            _count = buffer.Count;
+            int _bytesRead = 0;
+            int _offset = buffer.Offset;
+            int _count = buffer.Count;
             while (_count > 0)
             {
                 int available = _currentSegment.Count - _currentSegmentOffset;
@@ -63,6 +66,21 @@ namespace Sakuno.Nekomimi.IO
                 if (!await NextSegmentAsync()) break;
             }
             return _bytesRead;
+        }
+
+        private async ValueTask<bool> CheckPositionAsync()
+        {
+            if (_currentSegmentStart > Position)
+            {
+                _currentSegment = default;
+                _currentSegmentStart = 0;
+                _currentIndex = -1;
+            }
+            while (_currentSegmentStart + _currentSegment.Count <= Position)
+            {
+                if (!await NextSegmentAsync()) return false;
+            }
+            return _currentSegment != default;
         }
 
         private async ValueTask<bool> NextSegmentAsync()
