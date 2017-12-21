@@ -1,9 +1,8 @@
-﻿using Sakuno.Nekomimi.IO;
-using Sakuno.Net;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using Sakuno.Nekomimi.IO;
 
 namespace Sakuno.Nekomimi
 {
@@ -97,17 +96,16 @@ namespace Sakuno.Nekomimi
 
         public Session(Socket clientSocket)
         {
-            ServerPipe = new Pipe(clientSocket);
+            ServerPipe = new Pipe((new SocketStream(clientSocket)));
         }
 
         internal async Task CreateClientPipeAndConnect(IPEndPoint remoteEndPoint)
         {
             var socket = new Socket(remoteEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
-            ClientPipe = new Pipe(socket);
-            ClientPipe.Operation.RemoteEndPoint = remoteEndPoint;
-
-            await socket.ConnectAsync(ClientPipe.Operation);
+            var clientStream = new SocketStream(socket);
+            await clientStream.ConnectAsync(remoteEndPoint);
+            ClientPipe = new Pipe(new SocketStream(socket));
         }
     }
 }

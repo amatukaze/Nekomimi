@@ -1,49 +1,26 @@
 ﻿using System;
 using System.Buffers;
-using System.Collections.Concurrent;
 using System.IO;
-using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using Sakuno.Nekomimi.IO;
-using Sakuno.Net;
 
 namespace Sakuno.Nekomimi
 {
     internal class Pipe : IStreamWrapper, IDisposable
     {
-        static ConcurrentQueue<SocketAsyncOperationContext> _operations;
-
         private int _readPosition, _readBufferLength;
         private bool _endOfStream;
 
-        public Socket Socket { get; }
-
-        public SocketAsyncOperationContext Operation { get; }
-
         private byte[] _buffer;
 
-        private PipeStream _stream;
+        private Stream _stream;
 
-        static Pipe()
+        public Pipe(Stream stream)
         {
-            _operations = new ConcurrentQueue<SocketAsyncOperationContext>();
-
-            for (var i = 0; i < 5; i++)
-                _operations.Enqueue(new SocketAsyncOperationContext());
-        }
-        public Pipe(Socket socket)
-        {
-            Socket = socket;
-
-            if (!_operations.TryDequeue(out var operation))
-                operation = new SocketAsyncOperationContext();
-
-            Operation = operation;
-
             _buffer = ArrayPool<byte>.Shared.Rent(4096);
 
-            _stream = new PipeStream(this);
+            _stream = stream;
         }
 
         public byte ReadByte()
@@ -172,18 +149,11 @@ namespace Sakuno.Nekomimi
             }
         }
 
-        public void Close()
+        void IDisposable.Dispose()
         {
-            Socket.Close();
-            Socket.Dispose();
-
-            Operation.SetBuffer(0, 0);
-
-            _operations.Enqueue(Operation);
+            _stream.Dispose();
             if (_buffer != null)
                 ArrayPool<byte>.Shared.Return(_buffer);
         }
-
-        void IDisposable.Dispose() => Close();
     }
 }
