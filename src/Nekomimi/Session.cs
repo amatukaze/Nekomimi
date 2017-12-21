@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -58,10 +60,43 @@ namespace Sakuno.Nekomimi
             }
         }
 
+        internal SessionStatus Status { get; set; }
+        internal void VerifyStatus(SessionStatus status)
+        {
+            if (Status != status)
+                throw new InvalidOperationException($"Bad session status. Expected: {status}, Current: {Status}");
+        }
+        internal void VerifyStatusAfter(SessionStatus status)
+        {
+            if (Status < status)
+                throw new InvalidOperationException($"Bad session status. Expected: {status}, Current: {Status}");
+        }
+
         public IDictionary<string, string> RequestHeaders { get; internal set; }
 
         internal SegmentBuffer RequestBodyBuffer;
-        //public byte[] RequestBody { get; set; }
+        private string _requestBodyString;
+
+        public Stream GetRequestBodyStream()
+        {
+            VerifyStatusAfter(SessionStatus.BeforeRequest);
+            return RequestBodyBuffer.CreateStream();
+        }
+
+        public string GetRequestBodyAsString()
+        {
+            VerifyStatusAfter(SessionStatus.BeforeRequest);
+            if (_requestBodyString == null)
+                using (var reader = new StreamReader(GetRequestBodyStream()))
+                    _requestBodyString = reader.ReadToEnd();
+            return _requestBodyString;
+        }
+
+        public byte[] GetRequestBody()
+        {
+            VerifyStatusAfter(SessionStatus.BeforeRequest);
+            return RequestBodyBuffer.ReadToEnd();
+        }
 
         IPEndPoint _forwardDestination;
         public IPEndPoint ForwardDestination
@@ -92,7 +127,28 @@ namespace Sakuno.Nekomimi
         public IDictionary<string, string> ResponseHeaders { get; internal set; }
 
         internal SegmentBuffer ResponseBodyBuffer;
-        //public byte[] ResponseBody { get; set; }
+        private string _responseBodyString;
+
+        public Stream GetResponseBodyStream()
+        {
+            VerifyStatusAfter(SessionStatus.BeforeResponse);
+            return ResponseBodyBuffer.CreateStream();
+        }
+
+        public string GetResponseBodyAsString()
+        {
+            VerifyStatusAfter(SessionStatus.BeforeResponse);
+            if (_responseBodyString == null)
+                using (var reader = new StreamReader(GetResponseBodyStream()))
+                    _responseBodyString = reader.ReadToEnd();
+            return _requestBodyString;
+        }
+
+        public byte[] GetResponseBody()
+        {
+            VerifyStatusAfter(SessionStatus.BeforeResponse);
+            return ResponseBodyBuffer.ReadToEnd();
+        }
 
         public Session(Socket clientSocket)
         {

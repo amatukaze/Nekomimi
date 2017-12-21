@@ -36,6 +36,11 @@ namespace Sakuno.Nekomimi
             Stop();
         }
 
+        public event Action<Session> BeforeRequest;
+        public event Action<Session> AfterRequest;
+        public event Action<Session> BeforeResponse;
+        public event Action<Session> AfterResponse;
+
         async void ListenerLoop()
         {
             while (_listener.IsListening)
@@ -61,6 +66,7 @@ namespace Sakuno.Nekomimi
             using (session.ServerPipe)
             {
                 {
+                    session.Status = SessionStatus.Preparing;
                     var parser = new HttpParser(session, session.ServerPipe);
 
                     parser.ParseRequest();
@@ -71,6 +77,8 @@ namespace Sakuno.Nekomimi
                     }
 
                     parser.ReadRequestBody();
+                    session.Status = SessionStatus.BeforeRequest;
+                    BeforeRequest?.Invoke(session);
                 }
 
                 {
@@ -89,15 +97,25 @@ namespace Sakuno.Nekomimi
                 {
                     await session.ClientPipe.SendRequest(session);
 
+                    session.Status = SessionStatus.AfterRequest;
+                    AfterRequest?.Invoke(session);
+
                     var parser = new HttpParser(session, session.ClientPipe);
 
                     parser.ParseResponse();
 
                     parser.ReadResponseBody();
 
+                    session.Status = SessionStatus.BeforeResponse;
+                    BeforeResponse?.Invoke(session);
+
                     await session.ServerPipe.SendResponse(session);
+
+                    session.Status = SessionStatus.AfterResponse;
+                    AfterResponse?.Invoke(session);
                 }
             }
+            session.Status = SessionStatus.Completed;
         }
     }
 }

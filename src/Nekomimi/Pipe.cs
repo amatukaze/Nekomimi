@@ -3,7 +3,6 @@ using System.Buffers;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using Sakuno.Nekomimi.IO;
 
 namespace Sakuno.Nekomimi
 {
@@ -103,7 +102,7 @@ namespace Sakuno.Nekomimi
 
             await Send(HttpConstants.CrLf);
 
-            await Send(new SegmentBufferStream(session.RequestBodyBuffer));
+            await Send(session.RequestBodyBuffer.CreateStream());
         }
 
         public async Task SendResponse(Session session)
@@ -138,7 +137,7 @@ namespace Sakuno.Nekomimi
                 await Send(HttpConstants.CrLf);
             }
 
-            await Send(new SegmentBufferStream(session.ResponseBodyBuffer));
+            await Send(session.ResponseBodyBuffer.CreateStream());
 
             if (chunkedEncoding)
             {

@@ -96,5 +96,15 @@ namespace Sakuno.Nekomimi.IO
                 oldCount = newCount;
             return _bufferedLength;
         }
+
+        public SegmentBufferStream CreateStream() => new SegmentBufferStream(this);
+
+        public byte[] ReadToEnd()
+        {
+            var buffer = new byte[FullFill().Result];
+            using (var stream = CreateStream())
+                stream.Read(buffer, 0, buffer.Length);
+            return buffer;
+        }
     }
 }
