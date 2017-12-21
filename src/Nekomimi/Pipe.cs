@@ -10,7 +10,7 @@ using Sakuno.Net;
 
 namespace Sakuno.Nekomimi
 {
-    internal class Pipe : IStreamWrapper
+    internal class Pipe : IStreamWrapper, IDisposable
     {
         static ConcurrentQueue<SocketAsyncOperationContext> _operations;
 
@@ -175,6 +175,7 @@ namespace Sakuno.Nekomimi
         public void Close()
         {
             Socket.Close();
+            Socket.Dispose();
 
             Operation.SetBuffer(0, 0);
 
@@ -182,5 +183,7 @@ namespace Sakuno.Nekomimi
             if (_buffer != null)
                 ArrayPool<byte>.Shared.Return(_buffer);
         }
+
+        void IDisposable.Dispose() => Close();
     }
 }

@@ -58,46 +58,45 @@ namespace Sakuno.Nekomimi
 
         async Task HandleSession(Session session)
         {
+            using (session.ServerPipe)
             {
-                var parser = new HttpParser(session, session.ServerPipe);
-
-                parser.ParseRequest();
-
-                if (session.RequestHeaders.TryGetValue("Expect", out var expectHeaderValue) && expectHeaderValue.OICEquals("100-continue"))
                 {
-                    await session.ServerPipe.SendASCII("100 Continue");
+                    var parser = new HttpParser(session, session.ServerPipe);
+
+                    parser.ParseRequest();
+
+                    if (session.RequestHeaders.TryGetValue("Expect", out var expectHeaderValue) && expectHeaderValue.OICEquals("100-continue"))
+                    {
+                        await session.ServerPipe.SendASCII("100 Continue");
+                    }
+
+                    parser.ReadRequestBody();
                 }
 
-                parser.ReadRequestBody();
-            }
-
-            {
-                var remoteEndPoint = session.ForwardDestination;
-                if (remoteEndPoint == null)
                 {
-                    var hostEntry = await Dns.GetHostEntryAsync(session.Host);
+                    var remoteEndPoint = session.ForwardDestination;
+                    if (remoteEndPoint == null)
+                    {
+                        var hostEntry = await Dns.GetHostEntryAsync(session.Host);
 
-                    remoteEndPoint = new IPEndPoint(hostEntry.AddressList[0], session.Port);
+                        remoteEndPoint = new IPEndPoint(hostEntry.AddressList[0], session.Port);
+                    }
+
+                    await session.CreateClientPipeAndConnect(remoteEndPoint);
                 }
 
-                await session.CreateClientPipeAndConnect(remoteEndPoint);
-                await session.ClientPipe.SendRequest(session);
-            }
+                using (session.ClientPipe)
+                {
+                    await session.ClientPipe.SendRequest(session);
 
-            {
-                var parser = new HttpParser(session, session.ClientPipe);
+                    var parser = new HttpParser(session, session.ClientPipe);
 
-                parser.ParseResponse();
+                    parser.ParseResponse();
 
-                parser.ReadResponseBody();
-            }
+                    parser.ReadResponseBody();
 
-            {
-                await session.ServerPipe.SendResponse(session);
-
-                session.ClientPipe.Close();
-
-                session.ServerPipe.Close();
+                    await session.ServerPipe.SendResponse(session);
+                }
             }
         }
     }
