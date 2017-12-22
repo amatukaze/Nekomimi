@@ -20,6 +20,8 @@ namespace Sakuno.Nekomimi.IO
         private readonly SemaphoreSlim _streamLock = new SemaphoreSlim(1);
         private readonly ReaderWriterLockSlim _listLock = new ReaderWriterLockSlim();
 
+        public event Action<long> ProgressChanged;
+
         public SegmentBuffer(IStreamWrapper wrapper, long? length = null)
         {
             _wrapper = wrapper;
@@ -74,6 +76,7 @@ namespace Sakuno.Nekomimi.IO
                         _buffers.Add(new ArraySegment<byte>(newBuffer, 0, bytesFromStream));
                         _bufferedLength += bytesFromStream;
                         _listLock.ExitWriteLock();
+                        ProgressChanged?.Invoke(_bufferedLength);
                     }
                     else
                     {

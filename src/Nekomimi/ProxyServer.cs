@@ -40,6 +40,8 @@ namespace Sakuno.Nekomimi
         public event Action<Session> AfterRequest;
         public event Action<Session> BeforeResponse;
         public event Action<Session> AfterResponse;
+        public event Action<Session, Exception> SessionFailed;
+        public event Action<Session, long> SessionProgress;
 
         async void ListenerLoop()
         {
@@ -56,6 +58,7 @@ namespace Sakuno.Nekomimi
                     catch (Exception e)
                     {
                         Console.WriteLine(e);
+                        throw;
                     }
                 }).Forget();
             }
@@ -65,8 +68,10 @@ namespace Sakuno.Nekomimi
         {
             using (session.ServerPipe)
             {
+                session.Status = SessionStatus.Preparing;
+
+                try
                 {
-                    session.Status = SessionStatus.Preparing;
                     var parser = new HttpParser(session, session.ServerPipe);
 
                     parser.ParseRequest();
@@ -77,10 +82,17 @@ namespace Sakuno.Nekomimi
                     }
 
                     parser.ReadRequestBody();
-                    session.Status = SessionStatus.BeforeRequest;
-                    BeforeRequest?.Invoke(session);
+                }
+                catch (Exception e)
+                {
+                    SessionFailed?.Invoke(session, e);
+                    return;
                 }
 
+                session.Status = SessionStatus.BeforeRequest;
+                BeforeRequest?.Invoke(session);
+
+                try
                 {
                     var remoteEndPoint = session.ForwardDestination;
                     if (remoteEndPoint == null)
@@ -92,24 +104,54 @@ namespace Sakuno.Nekomimi
 
                     await session.CreateClientPipeAndConnect(remoteEndPoint);
                 }
+                catch (Exception e)
+                {
+                    SessionFailed?.Invoke(session, e);
+                    return;
+                }
 
                 using (session.ClientPipe)
                 {
-                    await session.ClientPipe.SendRequest(session);
+                    try
+                    {
+                        await session.ClientPipe.SendRequest(session);
+                    }
+                    catch (Exception e)
+                    {
+                        SessionFailed?.Invoke(session, e);
+                        return;
+                    }
 
                     session.Status = SessionStatus.AfterRequest;
                     AfterRequest?.Invoke(session);
 
-                    var parser = new HttpParser(session, session.ClientPipe);
+                    try
+                    {
+                        var parser = new HttpParser(session, session.ClientPipe);
 
-                    parser.ParseResponse();
+                        parser.ParseResponse();
+                        parser.ReadResponseBody();
 
-                    parser.ReadResponseBody();
+                        session.ResponseBodyBuffer.ProgressChanged += progress => SessionProgress?.Invoke(session, progress);
+                    }
+                    catch (Exception e)
+                    {
+                        SessionFailed?.Invoke(session, e);
+                        return;
+                    }
 
                     session.Status = SessionStatus.BeforeResponse;
                     BeforeResponse?.Invoke(session);
 
-                    await session.ServerPipe.SendResponse(session);
+                    try
+                    {
+                        await session.ServerPipe.SendResponse(session);
+                    }
+                    catch (Exception e)
+                    {
+                        SessionFailed?.Invoke(session, e);
+                        return;
+                    }
 
                     session.Status = SessionStatus.AfterResponse;
                     AfterResponse?.Invoke(session);
