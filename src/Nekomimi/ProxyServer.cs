@@ -79,6 +79,7 @@ namespace Sakuno.Nekomimi
                     if (session.RequestHeaders.TryGetValue("Expect", out var expectHeaderValue) && expectHeaderValue.OICEquals("100-continue"))
                     {
                         await session.ServerPipe.SendASCII("100 Continue");
+                        session.RequestHeaders.Remove("Expect");
                     }
 
                     parser.ReadRequestBody();
