@@ -19,6 +19,9 @@ namespace Sakuno.Nekomimi.Sample.Basic
 
             _proxyServer.Start(15000);
 
+            _proxyServer.AfterResponse += session =>
+                Console.WriteLine($"{session.Method} {session.Host}:{session.Port} {session.Path} {session.StatusCode}");
+
             Console.WriteLine("Press Ctrl+C to stop...");
 
             _completion.Task.Wait();

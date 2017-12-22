@@ -76,6 +76,7 @@ namespace Sakuno.Nekomimi.IO
                         _buffers.Add(new ArraySegment<byte>(newBuffer, 0, bytesFromStream));
                         _bufferedLength += bytesFromStream;
                         _listLock.ExitWriteLock();
+                        if (_bufferedLength == Length) _endOfStream = true;
                         ProgressChanged?.Invoke(_bufferedLength);
                     }
                     else
