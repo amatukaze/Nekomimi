@@ -394,7 +394,6 @@ namespace Sakuno.Nekomimi
                         _endOfStream = true;
                         return 0;
                     }
-                    _parser._pipe.Advance();
                 }
                 if (buffer.Count >= _chunkSize)
                 {
