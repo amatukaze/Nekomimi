@@ -113,49 +113,57 @@ namespace Sakuno.Nekomimi
 
                 using (session.ClientPipe)
                 {
-                    try
+                    if (session.IsHTTPS)
                     {
-                        await session.ClientPipe.SendRequest(session);
+                        await session.ServerPipe.SendASCII("HTTP/1.1 200 Connection Established\r\n\r\n");
+                        await session.ServerPipe.TunnelTo(session.ClientPipe);
                     }
-                    catch (Exception e)
+                    else
                     {
-                        SessionFailed?.Invoke(session, e);
-                        return;
+                        try
+                        {
+                            await session.ClientPipe.SendRequest(session);
+                        }
+                        catch (Exception e)
+                        {
+                            SessionFailed?.Invoke(session, e);
+                            return;
+                        }
+
+                        session.Status = SessionStatus.AfterRequest;
+                        AfterRequest?.Invoke(session);
+
+                        try
+                        {
+                            var parser = new HttpParser(session, session.ClientPipe);
+
+                            parser.ParseResponse();
+                            parser.ReadResponseBody();
+
+                            session.ResponseBodyBuffer.ProgressChanged += progress => SessionProgress?.Invoke(session, progress);
+                        }
+                        catch (Exception e)
+                        {
+                            SessionFailed?.Invoke(session, e);
+                            return;
+                        }
+
+                        session.Status = SessionStatus.BeforeResponse;
+                        BeforeResponse?.Invoke(session);
+
+                        try
+                        {
+                            await session.ServerPipe.SendResponse(session);
+                        }
+                        catch (Exception e)
+                        {
+                            SessionFailed?.Invoke(session, e);
+                            return;
+                        }
+
+                        session.Status = SessionStatus.AfterResponse;
+                        AfterResponse?.Invoke(session);
                     }
-
-                    session.Status = SessionStatus.AfterRequest;
-                    AfterRequest?.Invoke(session);
-
-                    try
-                    {
-                        var parser = new HttpParser(session, session.ClientPipe);
-
-                        parser.ParseResponse();
-                        parser.ReadResponseBody();
-
-                        session.ResponseBodyBuffer.ProgressChanged += progress => SessionProgress?.Invoke(session, progress);
-                    }
-                    catch (Exception e)
-                    {
-                        SessionFailed?.Invoke(session, e);
-                        return;
-                    }
-
-                    session.Status = SessionStatus.BeforeResponse;
-                    BeforeResponse?.Invoke(session);
-
-                    try
-                    {
-                        await session.ServerPipe.SendResponse(session);
-                    }
-                    catch (Exception e)
-                    {
-                        SessionFailed?.Invoke(session, e);
-                        return;
-                    }
-
-                    session.Status = SessionStatus.AfterResponse;
-                    AfterResponse?.Invoke(session);
                 }
             }
             session.Status = SessionStatus.Completed;

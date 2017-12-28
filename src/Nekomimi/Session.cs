@@ -12,53 +12,17 @@ namespace Sakuno.Nekomimi
     {
         internal Pipe ServerPipe { get; }
 
-        internal HttpMethod _method;
-        public HttpMethod Method
-        {
-            get => _method;
-            set
-            {
-                if (_method != value)
-                    _method = value;
-            }
-        }
+        public HttpMethod Method { get; internal set; }
 
         internal HttpVersion HttpVersion { get; set; }
 
-        internal string _host;
-        public string Host
-        {
-            get => _host;
-            set
-            {
-                if (_host != value)
-                    _host = value;
-            }
-        }
+        public string Host { get; internal set; }
 
-        internal int _port = 80;
-        public int Port
-        {
-            get => _port;
-            set
-            {
-                if (_port != value)
-                {
-                    _port = value;
-                }
-            }
-        }
+        public int Port { get; internal set; }
 
-        internal string _path;
-        public string Path
-        {
-            get => _path;
-            set
-            {
-                if (_path != value)
-                    _path = value;
-            }
-        }
+        public string Path { get; internal set; }
+
+        public bool IsHTTPS { get; internal set; }
 
         internal SessionStatus Status { get; set; }
         internal void VerifyStatus(SessionStatus status)
@@ -98,29 +62,11 @@ namespace Sakuno.Nekomimi
             return RequestBodyBuffer.ReadToEnd();
         }
 
-        IPEndPoint _forwardDestination;
-        public IPEndPoint ForwardDestination
-        {
-            get => _forwardDestination;
-            set
-            {
-                if (_forwardDestination != value)
-                    _forwardDestination = value;
-            }
-        }
+        public IPEndPoint ForwardDestination { get; internal set; }
 
         internal Pipe ClientPipe { get; set; }
 
-        internal int _statusCode;
-        public int StatusCode
-        {
-            get => _statusCode;
-            set
-            {
-                if (_statusCode != value)
-                    _statusCode = value;
-            }
-        }
+        public int StatusCode { get; internal set; }
 
         internal string ReasonPhase { get; set; }
 
@@ -152,7 +98,7 @@ namespace Sakuno.Nekomimi
 
         public Session(Socket clientSocket)
         {
-            ServerPipe = new Pipe((new SocketStream(clientSocket)));
+            ServerPipe = new Pipe(clientSocket);
         }
 
         internal async Task CreateClientPipeAndConnect(IPEndPoint remoteEndPoint)
@@ -161,7 +107,7 @@ namespace Sakuno.Nekomimi
 
             var clientStream = new SocketStream(socket);
             await clientStream.ConnectAsync(remoteEndPoint);
-            ClientPipe = new Pipe(new SocketStream(socket));
+            ClientPipe = new Pipe(socket);
         }
     }
 }

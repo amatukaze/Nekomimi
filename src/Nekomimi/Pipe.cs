@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers;
 using System.IO;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -13,13 +14,16 @@ namespace Sakuno.Nekomimi
 
         private byte[] _buffer;
 
+        private Socket _socket;
         private Stream _stream;
 
-        public Pipe(Stream stream)
+        public Pipe(Socket socket)
         {
             _buffer = ArrayPool<byte>.Shared.Rent(4096);
 
-            _stream = stream;
+            socket.Blocking = true;
+            _socket = socket;
+            _stream = new SocketStream(socket);
         }
 
         public byte ReadByte()
@@ -145,6 +149,36 @@ namespace Sakuno.Nekomimi
                 await SendASCII("0");
                 await Send(HttpConstants.CrLf);
                 await Send(HttpConstants.CrLf);
+            }
+        }
+
+        public async Task TunnelTo(Pipe other)
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(4096);
+            try
+            {
+                while (true)
+                {
+                    if (_socket.Available > 0)
+                    {
+                        int received = _socket.Receive(buffer);
+                        other._socket.Send(buffer, received, SocketFlags.None);
+                    }
+                    else if (other._socket.Available > 0)
+                    {
+                        int received = other._socket.Receive(buffer);
+                        _socket.Send(buffer, received, SocketFlags.None);
+                    }
+                    else await Task.Delay(100);
+                }
+            }
+            catch (SocketException)
+            {
+                return;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
             }
         }
 

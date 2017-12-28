@@ -25,7 +25,7 @@ namespace Sakuno.Nekomimi
 
         public void ParseRequest()
         {
-            _session._method = ReadHttpMethod();
+            _session.Method = ReadHttpMethod();
 
             AssertChar(' ');
 
@@ -41,14 +41,24 @@ namespace Sakuno.Nekomimi
 
             AssertNewline();
 
-            if (_session.RequestHeaders.TryGetValue("Host", out var host))
-                _session._host = host;
+            if (_session.Method == HttpMethod.Connect)
+            {
+                _session.IsHTTPS = true;
+                int i = requestUri.LastIndexOf(':');
+                _session.Host = requestUri.Substring(0, i);
+                _session.Port = int.Parse(requestUri.Substring(i + 1));
+            }
+            else
+            {
+                if (_session.RequestHeaders.TryGetValue("Host", out var host))
+                    _session.Host = host;
 
-            if (Uri.TryCreate(requestUri, UriKind.RelativeOrAbsolute, out var uri))
-                _session._path = uri.LocalPath;
-
-            if (_session._method == HttpMethod.Connect)
-                _session._port = 443;
+                if (Uri.TryCreate(requestUri, UriKind.RelativeOrAbsolute, out var uri))
+                {
+                    _session.Path = uri.LocalPath;
+                    _session.Port = uri.Port; //class Uri knows port 80
+                }
+            }
         }
 
         public void ReadRequestBody()
@@ -71,7 +81,7 @@ namespace Sakuno.Nekomimi
 
             AssertChar(' ');
 
-            _session._statusCode = ReadDecimal();
+            _session.StatusCode = ReadDecimal();
 
             AssertChar(' ');
 
@@ -288,7 +298,7 @@ namespace Sakuno.Nekomimi
                 while (true)
                 {
                     var b = _pipe.PeekByte();
-                    if (!IsLetter(b) && b != '-')
+                    if (b == ':')
                         break;
 
                     builder.Append((char)b);
