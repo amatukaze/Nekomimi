@@ -36,12 +36,28 @@ namespace Sakuno.Nekomimi
                 throw new SocketException((int)result);
         }
 
-        public override int Read(byte[] buffer, int offset, int count) =>
-            _socket.Receive(buffer, offset, count, SocketFlags.None);
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_socket.Available == 0)
+                while (!_socket.Poll(10, SelectMode.SelectRead)) { }
+            if (_socket.Available == 0) return 0;
+            return _socket.Receive(buffer, offset, count, SocketFlags.None);
+        }
+
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             _operation.SetBuffer(buffer, offset, count);
 
+            if (_socket.Available == 0)
+                try
+                {
+                    while (!await Task.Run(() => _socket.Poll(10, SelectMode.SelectRead))) { }
+                }
+                catch (SocketException)
+                {
+                    return 0;
+                }
+            if (_socket.Available == 0) return 0;
             var result = await _socket.ReceiveAsync(_operation);
             if (result != SocketError.Success)
                 throw new SocketException((int)result);
@@ -68,7 +84,8 @@ namespace Sakuno.Nekomimi
             if (_isDisposed != 0 || Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0)
                 return;
 
-            _socket.Close();
+            _socket.Disconnect(false);
+            _socket.Dispose();
             _socket = null;
             _operation.SetBuffer(null);
             _operation = null;

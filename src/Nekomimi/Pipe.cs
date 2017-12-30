@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using Sakuno.Net;
 
 namespace Sakuno.Nekomimi
 {
@@ -106,7 +107,8 @@ namespace Sakuno.Nekomimi
 
             await Send(HttpConstants.CrLf);
 
-            await Send(session.RequestBodyBuffer.CreateStream());
+            if (session.RequestBodyBuffer != null)
+                await Send(session.RequestBodyBuffer.CreateStream());
         }
 
         public async Task SendResponse(Session session)
@@ -141,7 +143,8 @@ namespace Sakuno.Nekomimi
                 await Send(HttpConstants.CrLf);
             }
 
-            await Send(session.ResponseBodyBuffer.CreateStream());
+            if (session.ResponseBodyBuffer != null)
+                await Send(session.ResponseBodyBuffer.CreateStream());
 
             if (chunkedEncoding)
             {
@@ -155,26 +158,46 @@ namespace Sakuno.Nekomimi
         public async Task TunnelTo(Pipe other)
         {
             var buffer = ArrayPool<byte>.Shared.Rent(4096);
+            var context = new SocketAsyncOperationContext();
+            context.SetBuffer(buffer);
             try
             {
+                bool clientSent = false;
                 while (true)
                 {
                     if (_socket.Available > 0)
                     {
-                        int received = _socket.Receive(buffer);
-                        other._socket.Send(buffer, received, SocketFlags.None);
+                        var receiveResult = await _socket.ReceiveAsync(context);
+                        if (receiveResult != SocketError.Success) return;
+
+                        context.SetBuffer(0, context.BytesTransferred);
+
+                        var sendResult = await other._socket.SendAsync(context);
+                        if (sendResult != SocketError.Success) return;
+
+                        clientSent = true;
                     }
                     else if (other._socket.Available > 0)
                     {
-                        int received = other._socket.Receive(buffer);
-                        _socket.Send(buffer, received, SocketFlags.None);
+                        var receiveResult = await other._socket.ReceiveAsync(context);
+                        if (receiveResult != SocketError.Success) return;
+
+                        context.SetBuffer(0, context.BytesTransferred);
+
+                        var sendResult = await _socket.SendAsync(context);
+                        if (sendResult != SocketError.Success) return;
+
+                        clientSent = true;
                     }
-                    else await Task.Delay(100);
+                    else if (clientSent)
+                    {
+                        if (other._socket.Poll(10, SelectMode.SelectRead) && other._socket.Available == 0) return;
+                    }
+                    else
+                    {
+                        if (_socket.Poll(10, SelectMode.SelectRead) && _socket.Available == 0) return;
+                    }
                 }
-            }
-            catch (SocketException)
-            {
-                return;
             }
             finally
             {
