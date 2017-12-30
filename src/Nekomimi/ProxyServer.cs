@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
+using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 
 namespace Sakuno.Nekomimi
@@ -42,6 +45,9 @@ namespace Sakuno.Nekomimi
         public event Action<Session> AfterResponse;
         public event Action<Session, Exception> SessionFailed;
         public event Action<Session, long> SessionProgress;
+        public event Action<Session> SslConnecting;
+
+        public Proxy UpstreamProxy { get; set; }
 
         async void ListenerLoop()
         {
@@ -90,20 +96,58 @@ namespace Sakuno.Nekomimi
                     return;
                 }
 
-                session.Status = SessionStatus.BeforeRequest;
-                BeforeRequest?.Invoke(session);
+                if (session.IsHTTPS)
+                {
+                    SslConnecting?.Invoke(session);
+                }
+                else
+                {
+                    session.Status = SessionStatus.BeforeRequest;
+                    BeforeRequest?.Invoke(session);
+                }
 
+                var proxy = UpstreamProxy;
                 try
                 {
-                    var remoteEndPoint = session.ForwardDestination;
-                    if (remoteEndPoint == null)
-                    {
-                        var hostEntry = await Dns.GetHostEntryAsync(session.Host);
+                    string host = proxy?.Host ?? session.Host;
+                    int port = proxy?.Port ?? session.Port;
 
-                        remoteEndPoint = new IPEndPoint(hostEntry.AddressList[0], session.Port);
+                    var hostEntry = await Dns.GetHostEntryAsync(host);
+                    IPEndPoint selectedEndPoint = null;
+                    List<Exception> exceptions = null;
+
+                    foreach (var address in hostEntry.AddressList)
+                    {
+                        var remoteEndPoint = new IPEndPoint(address, port);
+                        try
+                        {
+                            await session.CreateClientPipeAndConnect(remoteEndPoint);
+
+                            selectedEndPoint = remoteEndPoint;
+                            if (proxy != null)
+                                session.ForwardDestination = remoteEndPoint;
+
+                            break;
+                        }
+                        catch (SocketException e)
+                        {
+                            if (exceptions == null)
+                                exceptions = new List<Exception> { e };
+                            else exceptions.Add(e);
+                        }
                     }
 
-                    await session.CreateClientPipeAndConnect(remoteEndPoint);
+                    if (selectedEndPoint == null)
+                    {
+                        if (exceptions.Count == 1)
+                        {
+                            var ex = exceptions[0];
+                            var info = ExceptionDispatchInfo.Capture(ex);
+                            info.Throw();
+                        }
+                        else
+                            throw new AggregateException(exceptions);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -115,7 +159,19 @@ namespace Sakuno.Nekomimi
                 {
                     if (session.IsHTTPS)
                     {
-                        await session.ServerPipe.SendASCII("HTTP/1.1 200 Connection Established\r\n\r\n");
+                        if (session.ForwardDestination != null)
+                        {
+                            await session.ClientPipe.SendRequest(session);
+                            var parser = new HttpParser(session, session.ClientPipe);
+                            parser.ParseResponse();
+                        }
+                        else
+                        {
+                            session.StatusCode = 200;
+                            session.ReasonPhase = "Connection Established";
+                            session.ResponseHeaders = new SortedList<string, string>();
+                        }
+                        await session.ServerPipe.SendResponse(session);
                         await session.ServerPipe.TunnelTo(session.ClientPipe);
                     }
                     else

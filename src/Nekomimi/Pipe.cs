@@ -85,13 +85,7 @@ namespace Sakuno.Nekomimi
             await Send(HttpConstants.FromMethod(session.Method));
             await Send(HttpConstants.Whitespace);
 
-            if (session.Method != HttpMethod.Connect)
-                await SendASCII(session.Path);
-            else
-            {
-                await SendASCII(session.Host);
-                await SendASCII(":443");
-            }
+            await SendASCII(session.FullUri);
 
             await Send(HttpConstants.Whitespace);
             await Send(HttpConstants.FromVersion(session.HttpVersion));

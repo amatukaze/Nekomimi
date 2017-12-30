@@ -20,7 +20,9 @@ namespace Sakuno.Nekomimi
 
         public int Port { get; internal set; }
 
-        public string Path { get; internal set; }
+        public string FullUri { get; internal set; }
+
+        public string LocalPath { get; internal set; }
 
         public bool IsHTTPS { get; internal set; }
 

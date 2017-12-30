@@ -84,7 +84,7 @@ namespace Sakuno.Nekomimi
             if (_isDisposed != 0 || Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0)
                 return;
 
-            _socket.Disconnect(false);
+            _socket.Close();
             _socket.Dispose();
             _socket = null;
             _operation.SetBuffer(null);

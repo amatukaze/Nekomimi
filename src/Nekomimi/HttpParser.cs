@@ -29,7 +29,7 @@ namespace Sakuno.Nekomimi
 
             AssertChar(' ');
 
-            var requestUri = ReadUntilWhitespace(_stringBuilder);
+            _session.FullUri = ReadUntilWhitespace(_stringBuilder);
 
             AssertChar(' ');
 
@@ -44,18 +44,18 @@ namespace Sakuno.Nekomimi
             if (_session.Method == HttpMethod.Connect)
             {
                 _session.IsHTTPS = true;
-                int i = requestUri.LastIndexOf(':');
-                _session.Host = requestUri.Substring(0, i);
-                _session.Port = int.Parse(requestUri.Substring(i + 1));
+                int i = _session.FullUri.LastIndexOf(':');
+                _session.Host = _session.FullUri.Substring(0, i);
+                _session.Port = int.Parse(_session.FullUri.Substring(i + 1));
             }
             else
             {
                 if (_session.RequestHeaders.TryGetValue("Host", out var host))
                     _session.Host = host;
 
-                if (Uri.TryCreate(requestUri, UriKind.RelativeOrAbsolute, out var uri))
+                if (Uri.TryCreate(_session.FullUri, UriKind.RelativeOrAbsolute, out var uri))
                 {
-                    _session.Path = uri.LocalPath;
+                    _session.LocalPath = uri.LocalPath;
                     _session.Port = uri.Port; //class Uri knows port 80
                 }
             }
