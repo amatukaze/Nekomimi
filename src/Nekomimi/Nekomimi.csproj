@@ -4,17 +4,34 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <OutputType>Library</OutputType>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <LangVersion>7.1</LangVersion>
+    <LangVersion>7.2</LangVersion>
     <RootNamespace>Sakuno.Nekomimi</RootNamespace>
     <AssemblyName>Nekomimi</AssemblyName>
+    <Version>0.1.0-blueprint</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputPath>$(SolutionDir)artifacts\$(Configuration)\</OutputPath>
+    <Authors>Kodama Sakuno</Authors>
+    <Product>Nekomimi</Product>
+    <Company>Kodama Sakuno</Company>
+    <Copyright>Copyright © 2017-2018 Kodama Sakuno</Copyright>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageLicenseUrl>https://github.com/amatukaze/Nekomimi/blob/master/LICENSE.md</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/amatukaze/Nekomimi</PackageProjectUrl>
+    <PackageTags>HTTP;Proxy</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Sakuno.Base" Version="0.3.1" />
+    <PackageReference Include="Sakuno.Base" Version="0.3.2" />
     <PackageReference Include="System.Buffers" Version="4.4.0" />
     <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.4.0" />
   </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="powershell -ExecutionPolicy Unrestricted -File $(SolutionDir)scripts\Execute-PostBuildEvent.ps1 -SolutionDir $(SolutionDir) -ProjectPath $(ProjectPath) -Configuration $(ConfigurationName) -TargetDir $(TargetDir) -TargetPath $(TargetPath)" />
+  </Target>
+
+  <Target Name="PostPack" AfterTargets="Pack">
+    <Exec Command="powershell -ExecutionPolicy Unrestricted -File $(SolutionDir)scripts\Execute-PostPackEvent.ps1 -SolutionDir $(SolutionDir) -PackageId $(PackageId) -PackageVersion $(PackageVersion) -PackageOutputPath $(PackageOutputPath)" />
+  </Target>
 
 </Project>
