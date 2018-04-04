@@ -54,6 +54,7 @@ namespace Sakuno.Nekomimi
             while (_listener.IsListening)
             {
                 var session = await _listener.GetNewSession().ConfigureAwait(false);
+                if (session == null) break;
 
                 Task.Run(() =>
                 {

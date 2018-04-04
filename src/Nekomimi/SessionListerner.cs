@@ -44,6 +44,9 @@ namespace Sakuno.Nekomimi
 
             _context.AcceptSocket = null;
 
+            if (clientSocket.RemoteEndPoint == null)
+                return null;
+
             return new Session(clientSocket);
         }
     }
