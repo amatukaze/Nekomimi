@@ -11,16 +11,12 @@ namespace Sakuno.Nekomimi
     {
         SessionListerner _listener;
 
-        public ProxyServer()
-        {
-            _listener = new SessionListerner();
-        }
-
         public void Start(int port)
         {
-            if (_listener.IsListening)
+            if (_listener != null)
                 throw new InvalidOperationException();
 
+            _listener = new SessionListerner();
             _listener.Start(port);
 
             ListenerLoop();
@@ -32,6 +28,7 @@ namespace Sakuno.Nekomimi
                 return;
 
             _listener.Stop();
+            _listener = null;
         }
 
         protected override void DisposeManagedResources()
@@ -51,9 +48,10 @@ namespace Sakuno.Nekomimi
 
         async void ListenerLoop()
         {
-            while (_listener.IsListening)
+            var listener = _listener;
+            while (listener.IsListening)
             {
-                var session = await _listener.GetNewSession().ConfigureAwait(false);
+                var session = await listener.GetNewSession().ConfigureAwait(false);
                 if (session == null) break;
 
                 Task.Run(() =>
