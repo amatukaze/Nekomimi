@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -21,6 +22,15 @@ namespace Sakuno.Nekomimi.IO
         private readonly ReaderWriterLockSlim _listLock = new ReaderWriterLockSlim();
 
         public event Action<long> ProgressChanged;
+
+        internal sealed class StreamWrapper : IStreamWrapper
+        {
+            private readonly Stream stream;
+            public StreamWrapper(Stream stream) => this.stream = stream;
+
+            public ValueTask<int> ReadAsync(ArraySegment<byte> buffer) => new ValueTask<int>(stream.ReadAsync(buffer.Array, buffer.Offset, buffer.Count));
+        }
+        public SegmentBuffer(Stream stream) : this(new StreamWrapper(stream), null) { }
 
         public SegmentBuffer(IStreamWrapper wrapper, long? length = null)
         {

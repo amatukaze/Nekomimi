@@ -45,6 +45,7 @@ namespace Sakuno.Nekomimi
         public event Action<Session> SslConnecting;
 
         public Proxy UpstreamProxy { get; set; }
+        public bool AutoDecompress { get; set; }
 
         async void ListenerLoop()
         {
@@ -71,6 +72,7 @@ namespace Sakuno.Nekomimi
 
         async Task HandleSession(Session session)
         {
+            session.Decompress = AutoDecompress;
             using (session.ServerPipe)
             {
                 session.Status = SessionStatus.Preparing;

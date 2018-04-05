@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -25,6 +26,8 @@ namespace Sakuno.Nekomimi
         public string LocalPath { get; internal set; }
 
         public bool IsHTTPS { get; internal set; }
+
+        public bool Decompress { get; set; }
 
         internal SessionStatus Status { get; set; }
         internal void VerifyStatus(SessionStatus status)
@@ -76,11 +79,33 @@ namespace Sakuno.Nekomimi
 
         internal SegmentBuffer ResponseBodyBuffer;
         private string _responseBodyString;
+        private SegmentBuffer ResponseDecompressionBuffer;
+
+        private SegmentBuffer CheckResponseDecompression()
+        {
+            if (!Decompress) return ResponseBodyBuffer;
+            if (ResponseDecompressionBuffer == null)
+            {
+                Stream decompressionStream = null;
+                if (ResponseHeaders.TryGetValue("Content-Encoding", out var encoding))
+                {
+                    if (encoding.OICEquals("gzip"))
+                        decompressionStream = new GZipStream(ResponseBodyBuffer.CreateStream(), CompressionMode.Decompress);
+                    else if (encoding.OICEquals("deflate"))
+                        decompressionStream = new DeflateStream(ResponseBodyBuffer.CreateStream(), CompressionMode.Decompress);
+                }
+                if (decompressionStream != null)
+                    ResponseDecompressionBuffer = new SegmentBuffer(decompressionStream);
+                else
+                    ResponseDecompressionBuffer = ResponseBodyBuffer;
+            }
+            return ResponseDecompressionBuffer;
+        }
 
         public Stream GetResponseBodyStream()
         {
             VerifyStatusAfter(SessionStatus.BeforeResponse);
-            return ResponseBodyBuffer.CreateStream();
+            return CheckResponseDecompression().CreateStream();
         }
 
         public string GetResponseBodyAsString()
@@ -95,7 +120,7 @@ namespace Sakuno.Nekomimi
         public byte[] GetResponseBody()
         {
             VerifyStatusAfter(SessionStatus.BeforeResponse);
-            return ResponseBodyBuffer.ReadToEnd();
+            return CheckResponseDecompression().ReadToEnd();
         }
 
         public Session(Socket clientSocket)
