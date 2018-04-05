@@ -1,20 +1,25 @@
 ﻿using System;
+using System.IO.Pipelines.Networking.Sockets;
+using System.Net;
 
 namespace Sakuno.Nekomimi
 {
-    public class ProxyServer : IDisposable
+    public partial class ProxyServer : IDisposable
     {
+        private readonly SocketListener _listener = new SocketListener();
+        public ProxyServer()
+        {
+            _listener.OnConnection(HandleConnection);
+        }
+
         public void Start(int port)
         {
-
+            _listener.Start(new IPEndPoint(IPAddress.Loopback, port));
         }
 
-        public void Stop()
-        {
+        public void Stop() => _listener.Stop();
 
-        }
-
-        public void Dispose() => Stop();
+        public void Dispose() => _listener.Dispose();
 
         public event Action<Session> BeforeRequest;
         public event Action<Session> AfterRequest;
