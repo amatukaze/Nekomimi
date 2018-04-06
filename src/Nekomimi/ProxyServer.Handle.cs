@@ -68,7 +68,7 @@ namespace Sakuno.Nekomimi
 
                     if (session.Request.Headers.ExpectContinue == true)
                     {
-                        outputText.Append("100 Continue");
+                        outputText.Append("100 Continue\r\n");
                         await connection.Output.FlushAsync();
                     }
 
@@ -87,6 +87,27 @@ namespace Sakuno.Nekomimi
                     }
 
                     downStreamCompleted = true;
+
+                    var response = await _httpClient.SendAsync(session.Request);
+                    session.Response = response;
+
+                    outputText.Format("HTTP/{0}.{1} {2} {3}\r\n",
+                        response.Version.Major,
+                        response.Version.Minor,
+                        (int)response.StatusCode,
+                        response.ReasonPhrase);
+
+                    foreach (var headerName in response.Headers)
+                        foreach (var header in headerName.Value)
+                            outputText.Format("{0}: {1}\r\n",
+                                headerName.Key,
+                                header);
+                    outputText.Append("\r\n");
+
+                    if (response.Content != null)
+                        await (await response.Content.ReadAsStreamAsync()).CopyToAsync(connection.GetStream());
+
+                    await outputText.FlushAsync();
                 }
                 catch (Exception ex)
                 {
