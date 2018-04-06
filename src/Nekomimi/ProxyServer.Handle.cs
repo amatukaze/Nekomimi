@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Buffers.Text;
 using System.IO.Pipelines;
 using System.IO.Pipelines.Text.Primitives;
@@ -75,87 +76,68 @@ namespace Sakuno.Nekomimi
                 }
             }
         }
-        private enum HttpBuilderState
+
+        private static async ValueTask<ReadOnlySequence<byte>> MoreAsync(PipeReader reader, SequencePosition consumed, SequencePosition examined)
         {
-            Init,
-            AfterRequest,
-            AfterHeader
+            reader.AdvanceTo(consumed, examined);
+            var result = await reader.ReadAsync();
+            if (result.IsCompleted && result.Buffer.IsEmpty)
+                throw new FormatException("Request incomplete.");
+            return result.Buffer;
         }
+
         private async Task HandleConnection(IDuplexPipe connection)
         {
-            Session session = null;
             var parser = new HttpParser(true);
-            HttpBuilderState state = HttpBuilderState.Init;
-            byte[] requestContent = null;
-            int requestRemaining = 0;
             var outputText = connection.Output.AsTextOutput(SymbolTable.InvariantUtf8);
 
-            while (true)
+            for (var result = await connection.Input.ReadAsync();
+                !(result.IsCanceled && result.Buffer.IsEmpty);
+                result = await connection.Input.ReadAsync())
             {
-                var result = await connection.Input.ReadAsync();
-                var buffer = result.Buffer;
-                var consumed = buffer.Start;
-                var examined = buffer.Start;
-
+                var session = new Session();
                 try
                 {
-                    if (buffer.IsEmpty && result.IsCompleted)
+                    var builder = new RequestBuilder(session.Request);
+                    ReadOnlySequence<byte> buffer = result.Buffer;
+                    SequencePosition consumed = buffer.Start, examined = buffer.Start;
+
+                    do buffer = await MoreAsync(connection.Input, consumed, examined);
+                    while (!parser.ParseRequestLine(builder, in buffer, out consumed, out examined));
+
+                    do buffer = await MoreAsync(connection.Input, consumed, examined);
+                    while (!parser.ParseHeaders(builder, in buffer, out consumed, out examined, out _));
+
+                    connection.Input.AdvanceTo(consumed, examined);
+
+                    if (session.Request.Headers.ExpectContinue == true)
                     {
-                        if (state == HttpBuilderState.Init) return;
-                        else throw new FormatException("Incompleted request");
+                        outputText.Append("100 Continue");
+                        await connection.Output.FlushAsync();
                     }
-                    try
+
+                    if (session.Request.Headers.TryGetValues("Content-Length", out var lengthStr)
+                        && int.TryParse(lengthStr.Single(), out var length))
                     {
-                        if (state == HttpBuilderState.Init)
+                        var requestBody = new byte[length];
+                        ArraySegment<byte> remained;
+                        while (remained.Count > 0)
                         {
-                            if (session == null)
-                                session = new Session();
-
-                            if (parser.ParseRequestLine(new RequestBuilder(session.Request), in buffer, out consumed, out examined))
-                                state++;
-                            else continue;
-                        }
-
-                        if (state == HttpBuilderState.AfterRequest)
-                        {
-                            if (parser.ParseHeaders(new RequestBuilder(session.Request), in buffer, out consumed, out examined, out int _))
-                            {
-                                state++;
-
-                                if (session.Request.Headers.ExpectContinue == true)
-                                {
-                                    outputText.Append("100 Continue");
-                                    await connection.Output.FlushAsync();
-                                }
-
-                                if (session.Request.Headers.TryGetValues("Content-Length", out var length)
-                                    && int.TryParse(length.Single(), out requestRemaining))
-                                    requestContent = new byte[requestRemaining];
-                                else requestRemaining = 0;
-                            }
-                            else continue;
-                        }
-
-                        if (state == HttpBuilderState.AfterHeader)
-                        {
-                            if (requestRemaining > 0)
-                            {
-                                requestRemaining -= await connection.Input.ReadAsync(new ArraySegment<byte>(requestContent, requestContent.Length - requestRemaining, requestRemaining));
-                                if (requestRemaining > 0) continue;
-                            }
-                            state = HttpBuilderState.Init;
-                            session.Request.Content = new ByteArrayContent(requestContent);
+                            int bytesRead = await connection.Input.ReadAsync(remained);
+                            if (bytesRead == 0)
+                                throw new FormatException("Incomplete request content");
+                            remained = new ArraySegment<byte>(requestBody, remained.Offset + bytesRead, remained.Count - bytesRead);
                         }
                     }
-                    catch (Exception e)
-                    {
-                        SessionFailed?.Invoke(session, e);
-                        break;
-                    }
+                }
+                catch (Exception ex)
+                {
+                    SessionFailed?.Invoke(session, ex);
+                    break;
                 }
                 finally
                 {
-                    connection.Input.AdvanceTo(consumed, examined);
+                    parser.Reset();
                 }
             }
         }
