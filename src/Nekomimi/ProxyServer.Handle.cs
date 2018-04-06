@@ -1,6 +1,10 @@
 ﻿using System;
+using System.Buffers.Text;
 using System.IO.Pipelines;
+using System.IO.Pipelines.Text.Primitives;
+using System.Linq;
 using System.Net.Http;
+using System.Text.Formatting;
 using System.Text.Http.Parser;
 using System.Text.Utf8;
 using System.Threading.Tasks;
@@ -82,6 +86,9 @@ namespace Sakuno.Nekomimi
             Session session = null;
             var parser = new HttpParser(true);
             HttpBuilderState state = HttpBuilderState.Init;
+            byte[] requestContent = null;
+            int requestRemaining = 0;
+            var outputText = connection.Output.AsTextOutput(SymbolTable.InvariantUtf8);
 
             while (true)
             {
@@ -112,8 +119,32 @@ namespace Sakuno.Nekomimi
                         if (state == HttpBuilderState.AfterRequest)
                         {
                             if (parser.ParseHeaders(new RequestBuilder(session.Request), in buffer, out consumed, out examined, out int _))
+                            {
                                 state++;
+
+                                if (session.Request.Headers.ExpectContinue == true)
+                                {
+                                    outputText.Append("100 Continue");
+                                    await connection.Output.FlushAsync();
+                                }
+
+                                if (session.Request.Headers.TryGetValues("Content-Length", out var length)
+                                    && int.TryParse(length.Single(), out requestRemaining))
+                                    requestContent = new byte[requestRemaining];
+                                else requestRemaining = 0;
+                            }
                             else continue;
+                        }
+
+                        if (state == HttpBuilderState.AfterHeader)
+                        {
+                            if (requestRemaining > 0)
+                            {
+                                requestRemaining -= await connection.Input.ReadAsync(new ArraySegment<byte>(requestContent, requestContent.Length - requestRemaining, requestRemaining));
+                                if (requestRemaining > 0) continue;
+                            }
+                            state = HttpBuilderState.Init;
+                            session.Request.Content = new ByteArrayContent(requestContent);
                         }
                     }
                     catch (Exception e)
