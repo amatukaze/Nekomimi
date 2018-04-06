@@ -47,7 +47,7 @@ namespace Sakuno.Nekomimi
             var outputText = connection.Output.AsTextOutput(SymbolTable.InvariantUtf8);
 
             for (var result = await connection.Input.ReadAsync();
-                !(result.IsCanceled && result.Buffer.IsEmpty);
+                !(result.IsCompleted && result.Buffer.IsEmpty);
                 result = await connection.Input.ReadAsync())
             {
                 var session = new Session();
@@ -97,6 +97,11 @@ namespace Sakuno.Nekomimi
                         (int)response.StatusCode,
                         response.ReasonPhrase);
 
+                    bool knownContentLength;
+                    if (!(knownContentLength = response.Headers.TryGetValues("Content-Length", out _)))
+                        if (response.Content != null)
+                            response.Headers.TransferEncodingChunked = true;
+
                     foreach (var headerName in response.Headers)
                         foreach (var header in headerName.Value)
                             outputText.Format("{0}: {1}\r\n",
@@ -105,9 +110,35 @@ namespace Sakuno.Nekomimi
                     outputText.Append("\r\n");
 
                     if (response.Content != null)
-                        await (await response.Content.ReadAsStreamAsync()).CopyToAsync(connection.GetStream());
+                    {
+                        var contentStream = await response.Content.ReadAsStreamAsync();
+                        if (knownContentLength)
+                            await contentStream.CopyToAsync(connection.GetStream());
+                        else
+                        {
+                            var sendBuffer = ArrayPool<byte>.Shared.Rent(4096);
+                            try
+                            {
+                                int bytesRead;
+                                do
+                                {
+                                    bytesRead = await contentStream.ReadAsync(sendBuffer, 0, sendBuffer.Length);
+                                    outputText.Append(bytesRead, 'x');
+                                    outputText.Append("\r\n");
+                                    await connection.Output.WriteAsync(new ReadOnlyMemory<byte>(sendBuffer, 0, bytesRead));
+                                    outputText.Append("\r\n");
+                                }
+                                while (bytesRead > 0);
+                            }
+                            finally
+                            {
+                                ArrayPool<byte>.Shared.Return(sendBuffer);
+                            }
+                        }
+                        contentStream.Seek(0, System.IO.SeekOrigin.Begin);
+                    }
 
-                    await outputText.FlushAsync();
+                    await connection.Output.FlushAsync();
                 }
                 catch (Exception ex)
                 {
