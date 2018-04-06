@@ -97,22 +97,23 @@ namespace Sakuno.Nekomimi
                         (int)response.StatusCode,
                         response.ReasonPhrase);
 
-                    bool knownContentLength;
-                    if (!(knownContentLength = response.Headers.TryGetValues("Content-Length", out _)))
-                        if (response.Content != null)
-                            response.Headers.TransferEncodingChunked = true;
+                    if (response.Content.Headers.ContentLength == null)
+                        response.Headers.TransferEncodingChunked = true;
+                    else
+                        response.Headers.TransferEncodingChunked = null;
 
-                    foreach (var headerName in response.Headers)
+                    foreach (var headerName in response.Headers.Concat(response.Content.Headers))
                         foreach (var header in headerName.Value)
                             outputText.Format("{0}: {1}\r\n",
                                 headerName.Key,
                                 header);
+
                     outputText.Append("\r\n");
 
                     if (response.Content != null)
                     {
                         var contentStream = await response.Content.ReadAsStreamAsync();
-                        if (knownContentLength)
+                        if (response.Content.Headers.ContentLength != null)
                             await contentStream.CopyToAsync(connection.GetStream());
                         else
                         {
