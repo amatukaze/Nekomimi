@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers;
 using System.Buffers.Text;
+using System.Collections.Generic;
 using System.IO.Pipelines;
 using System.IO.Pipelines.Text.Primitives;
 using System.Linq;
@@ -17,7 +18,12 @@ namespace Sakuno.Nekomimi
         private struct RequestBuilder : IHttpRequestLineHandler, IHttpHeadersHandler
         {
             private HttpRequestMessage request;
-            public RequestBuilder(HttpRequestMessage request) => this.request = request;
+            public Dictionary<string, string> PendingContentHeaders;
+            public void Reset(HttpRequestMessage request)
+            {
+                this.request = request;
+                PendingContentHeaders.Clear();
+            }
 
             public void OnStartLine(Http.Method method, Http.Version version, ReadOnlySpan<byte> target, ReadOnlySpan<byte> path, ReadOnlySpan<byte> query, ReadOnlySpan<byte> customMethod, bool pathEncoded)
             {
@@ -28,7 +34,9 @@ namespace Sakuno.Nekomimi
 
             public void OnHeader(ReadOnlySpan<byte> name, ReadOnlySpan<byte> value)
             {
-                request.Headers.TryAddWithoutValidation(new Utf8String(name).ToString(), new Utf8String(value).ToString());
+                string nameStr = new Utf8String(name).ToString(), valueStr = new Utf8String(value).ToString();
+                if (!request.Headers.TryAddWithoutValidation(nameStr, valueStr))
+                    PendingContentHeaders.Add(nameStr, valueStr);
             }
         }
 
@@ -45,6 +53,8 @@ namespace Sakuno.Nekomimi
         {
             var parser = new HttpParser(true);
             var outputText = connection.Output.AsTextOutput(SymbolTable.InvariantUtf8);
+            RequestBuilder builder = default;
+            builder.PendingContentHeaders = new Dictionary<string, string>(10);
 
             for (var result = await connection.Input.ReadAsync();
                 !(result.IsCompleted && result.Buffer.IsEmpty);
@@ -54,7 +64,7 @@ namespace Sakuno.Nekomimi
                 bool downStreamCompleted = false;
                 try
                 {
-                    var builder = new RequestBuilder(session.Request);
+                    builder.Reset(session.Request);
                     ReadOnlySequence<byte> buffer = result.Buffer;
                     SequencePosition consumed = buffer.Start, examined = buffer.Start;
 
@@ -72,11 +82,11 @@ namespace Sakuno.Nekomimi
                         await connection.Output.FlushAsync();
                     }
 
-                    if (session.Request.Headers.TryGetValues("Content-Length", out var lengthStr)
-                        && int.TryParse(lengthStr.Single(), out var length))
+                    if (builder.PendingContentHeaders.TryGetValue("Content-Length", out var lengthStr)
+                        && int.TryParse(lengthStr, out var length))
                     {
                         var requestBody = new byte[length];
-                        ArraySegment<byte> remained;
+                        ArraySegment<byte> remained = new ArraySegment<byte>(requestBody);
                         while (remained.Count > 0)
                         {
                             int bytesRead = await connection.Input.ReadAsync(remained);
@@ -84,6 +94,10 @@ namespace Sakuno.Nekomimi
                                 throw new FormatException("Incomplete request content");
                             remained = new ArraySegment<byte>(requestBody, remained.Offset + bytesRead, remained.Count - bytesRead);
                         }
+
+                        session.Request.Content = new ByteArrayContent(requestBody);
+                        foreach (var header in builder.PendingContentHeaders)
+                            session.Request.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
                     }
 
                     downStreamCompleted = true;
