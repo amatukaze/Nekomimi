@@ -21,59 +21,14 @@ namespace Sakuno.Nekomimi
 
             public void OnStartLine(Http.Method method, Http.Version version, ReadOnlySpan<byte> target, ReadOnlySpan<byte> path, ReadOnlySpan<byte> query, ReadOnlySpan<byte> customMethod, bool pathEncoded)
             {
-                request.Method = MapMethod(method) ?? new HttpMethod(new Utf8String(customMethod).ToString());
-                request.Version = MapVersion(version);
+                request.Method = HttpConstants.MapMethod(method) ?? new HttpMethod(new Utf8String(customMethod).ToString());
+                request.Version = HttpConstants.MapVersion(version);
                 request.RequestUri = new Uri(new Utf8String(target).ToString());
             }
 
             public void OnHeader(ReadOnlySpan<byte> name, ReadOnlySpan<byte> value)
             {
                 request.Headers.TryAddWithoutValidation(new Utf8String(name).ToString(), new Utf8String(value).ToString());
-            }
-
-            private static HttpMethod MapMethod(Http.Method method)
-            {
-                switch (method)
-                {
-                    case Http.Method.Get:
-                        return HttpMethod.Get;
-                    case Http.Method.Put:
-                        return HttpMethod.Put;
-                    case Http.Method.Delete:
-                        return HttpMethod.Delete;
-                    case Http.Method.Post:
-                        return HttpMethod.Post;
-                    case Http.Method.Head:
-                        return HttpMethod.Head;
-                    case Http.Method.Trace:
-                        return HttpMethod.Trace;
-                    case Http.Method.Patch:
-                        return new HttpMethod("PATCH");
-                    case Http.Method.Connect:
-                        return new HttpMethod("CONNECT");
-                    case Http.Method.Options:
-                        return new HttpMethod("OPTIONS");
-                    default:
-                        return null;
-                }
-            }
-
-            private static Version Version10 { get; } = new Version(1, 0);
-            private static Version Version11 { get; } = new Version(1, 1);
-            private static Version Version20 { get; } = new Version(2, 0);
-            private static Version MapVersion(Http.Version version)
-            {
-                switch (version)
-                {
-                    case Http.Version.Http10:
-                        return Version10;
-                    case Http.Version.Http11:
-                        return Version11;
-                    case Http.Version.Http20:
-                        return Version20;
-                    default:
-                        throw new FormatException("Unknown http version");
-                }
             }
         }
 
@@ -96,6 +51,7 @@ namespace Sakuno.Nekomimi
                 result = await connection.Input.ReadAsync())
             {
                 var session = new Session();
+                bool downStreamCompleted = false;
                 try
                 {
                     var builder = new RequestBuilder(session.Request);
@@ -129,11 +85,14 @@ namespace Sakuno.Nekomimi
                             remained = new ArraySegment<byte>(requestBody, remained.Offset + bytesRead, remained.Count - bytesRead);
                         }
                     }
+
+                    downStreamCompleted = true;
                 }
                 catch (Exception ex)
                 {
                     SessionFailed?.Invoke(session, ex);
-                    break;
+                    if (!downStreamCompleted)
+                        break;
                 }
                 finally
                 {
