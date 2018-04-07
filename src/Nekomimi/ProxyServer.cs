@@ -8,10 +8,18 @@ namespace Sakuno.Nekomimi
     public partial class ProxyServer : IDisposable
     {
         private readonly SocketListener _listener = new SocketListener();
-        private readonly HttpClient _httpClient = new HttpClient();
+        private readonly HttpClient _httpClient;
+        private readonly HttpClientHandler _httpClientHandler = new HttpClientHandler
+        {
+            UseCookies = false,
+            AllowAutoRedirect = false,
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+        };
+
         public ProxyServer()
         {
             _listener.OnConnection(HandleConnection);
+            _httpClient = new HttpClient(_httpClientHandler);
             _httpClient.DefaultRequestHeaders.Clear();
         }
 
@@ -45,6 +53,15 @@ namespace Sakuno.Nekomimi
             catch { }
         }
 
-        public Proxy UpstreamProxy { get; set; }
+        private IWebProxy _upstream;
+        public IWebProxy UpstreamProxy
+        {
+            get => _upstream;
+            set
+            {
+                _httpClientHandler.Proxy = _upstream = value;
+                _httpClientHandler.UseProxy = _upstream != null;
+            }
+        }
     }
 }
