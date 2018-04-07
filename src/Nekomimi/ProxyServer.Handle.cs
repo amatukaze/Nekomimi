@@ -18,11 +18,11 @@ namespace Sakuno.Nekomimi
         private struct RequestBuilder : IHttpRequestLineHandler, IHttpHeadersHandler
         {
             public Session Session;
-            public Dictionary<string, string> PendingContentHeaders;
+            public Dictionary<string, string> PendingHeaders;
             public void Reset(Session session)
             {
                 this.Session = session;
-                PendingContentHeaders.Clear();
+                PendingHeaders.Clear();
             }
 
             public void OnStartLine(Http.Method method, Http.Version version, ReadOnlySpan<byte> target, ReadOnlySpan<byte> path, ReadOnlySpan<byte> query, ReadOnlySpan<byte> customMethod, bool pathEncoded)
@@ -46,7 +46,7 @@ namespace Sakuno.Nekomimi
             {
                 string nameStr = new Utf8String(name).ToString(), valueStr = new Utf8String(value).ToString();
                 if (!Session.Request.Headers.TryAddWithoutValidation(nameStr, valueStr))
-                    PendingContentHeaders.Add(nameStr, valueStr);
+                    PendingHeaders.Add(nameStr, valueStr);
             }
         }
 
@@ -64,7 +64,7 @@ namespace Sakuno.Nekomimi
             var parser = new HttpParser(true);
             var outputText = connection.Output.AsTextOutput(SymbolTable.InvariantUtf8);
             RequestBuilder builder = default;
-            builder.PendingContentHeaders = new Dictionary<string, string>(10);
+            builder.PendingHeaders = new Dictionary<string, string>(10);
 
             for (var result = await connection.Input.ReadAsync();
                 !(result.IsCompleted && result.Buffer.IsEmpty);
@@ -115,7 +115,7 @@ namespace Sakuno.Nekomimi
                         await connection.Output.FlushAsync();
                     }
 
-                    if (builder.PendingContentHeaders.TryGetValue("Content-Length", out var lengthStr)
+                    if (builder.PendingHeaders.TryGetValue("Content-Length", out var lengthStr)
                         && int.TryParse(lengthStr, out var length))
                     {
                         var requestBody = new byte[length];
@@ -129,7 +129,7 @@ namespace Sakuno.Nekomimi
                         }
 
                         session.Request.Content = new ByteArrayContent(requestBody);
-                        foreach (var header in builder.PendingContentHeaders)
+                        foreach (var header in builder.PendingHeaders)
                             session.Request.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
                     }
 
