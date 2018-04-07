@@ -71,7 +71,6 @@ namespace Sakuno.Nekomimi
                 result = await connection.Input.ReadAsync())
             {
                 var session = new Session();
-                bool downStreamCompleted = false;
                 try
                 {
                     builder.Reset(session);
@@ -102,6 +101,7 @@ namespace Sakuno.Nekomimi
                                     session.Request.Version.Major,
                                     session.Request.Version.Minor);
                                 await outputText.FlushAsync();
+                                EatException(SslConnecting, session);
                                 Task upward = connection.Input.CopyToAsync(upstream.Output),
                                     downward = upstream.Input.CopyToAsync(connection.Output);
                                 await Task.WhenAll(upward, downward);
@@ -133,10 +133,26 @@ namespace Sakuno.Nekomimi
                             session.Request.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
                     }
 
-                    downStreamCompleted = true;
+                    EatException(BeforeRequest, session);
 
-                    var response = await _httpClient.SendAsync(session.Request);
+                    HttpResponseMessage response;
+                    try
+                    {
+                        response = await _httpClient.SendAsync(session.Request);
+                    }
+                    catch (Exception ex)
+                    {
+                        outputText.Format("HTTP/{0}.{1} 502 Bad Gateway\r\n\r\n",
+                            session.Request.Version.Major,
+                            session.Request.Version.Minor);
+                        await outputText.FlushAsync();
+                        SessionFailed?.Invoke(session, ex);
+                        continue;
+                    }
+
+                    EatException(AfterRequest, session);
                     session.Response = response;
+                    EatException(BeforeResponse, session);
 
                     outputText.Format("HTTP/{0}.{1} {2} {3}\r\n",
                         response.Version.Major,
@@ -147,7 +163,7 @@ namespace Sakuno.Nekomimi
                     if (response.Content.Headers.ContentLength == null)
                         response.Headers.TransferEncodingChunked = true;
                     else
-                        response.Headers.TransferEncodingChunked = null;
+                        response.Headers.TransferEncodingChunked = false;
 
                     foreach (var header in response.Headers.Concat(response.Content.Headers))
                         outputText.Format("{0}: {1}\r\n",
@@ -186,12 +202,12 @@ namespace Sakuno.Nekomimi
                     }
 
                     await connection.Output.FlushAsync();
+                    EatException(AfterResponse, session);
                 }
                 catch (Exception ex)
                 {
                     SessionFailed?.Invoke(session, ex);
-                    if (!downStreamCompleted)
-                        break;
+                    break;
                 }
                 finally
                 {

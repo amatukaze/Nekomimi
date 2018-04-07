@@ -33,8 +33,17 @@ namespace Sakuno.Nekomimi
         public event Action<Session> BeforeResponse;
         public event Action<Session> AfterResponse;
         public event Action<Session, Exception> SessionFailed;
-        public event Action<Session, long> SessionProgress;
+        //public event Action<Session, long> SessionProgress;
         public event Action<Session> SslConnecting;
+
+        private void EatException(Action<Session> handler, Session session)
+        {
+            try
+            {
+                handler?.Invoke(session);
+            }
+            catch { }
+        }
 
         public Proxy UpstreamProxy { get; set; }
     }
