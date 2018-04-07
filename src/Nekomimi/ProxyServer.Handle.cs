@@ -17,25 +17,35 @@ namespace Sakuno.Nekomimi
     {
         private struct RequestBuilder : IHttpRequestLineHandler, IHttpHeadersHandler
         {
-            private HttpRequestMessage request;
+            public Session Session;
             public Dictionary<string, string> PendingContentHeaders;
-            public void Reset(HttpRequestMessage request)
+            public void Reset(Session session)
             {
-                this.request = request;
+                this.Session = session;
                 PendingContentHeaders.Clear();
             }
 
             public void OnStartLine(Http.Method method, Http.Version version, ReadOnlySpan<byte> target, ReadOnlySpan<byte> path, ReadOnlySpan<byte> query, ReadOnlySpan<byte> customMethod, bool pathEncoded)
             {
-                request.Method = HttpConstants.MapMethod(method) ?? new HttpMethod(new Utf8String(customMethod).ToString());
-                request.Version = HttpConstants.MapVersion(version);
-                request.RequestUri = new Uri(new Utf8String(target).ToString());
+                Session.Request = new HttpRequestMessage
+                {
+                    Method = HttpConstants.MapMethod(method) ?? new HttpMethod(new Utf8String(customMethod).ToString()),
+                    Version = HttpConstants.MapVersion(version),
+                };
+
+                if (method == Http.Method.Connect)
+                {
+                    Session.IsHTTPS = true;
+                    Session.Request.RequestUri = new Uri("https://" + new Utf8String(target));
+                }
+                else
+                    Session.Request.RequestUri = new Uri(new Utf8String(target).ToString());
             }
 
             public void OnHeader(ReadOnlySpan<byte> name, ReadOnlySpan<byte> value)
             {
                 string nameStr = new Utf8String(name).ToString(), valueStr = new Utf8String(value).ToString();
-                if (!request.Headers.TryAddWithoutValidation(nameStr, valueStr))
+                if (!Session.Request.Headers.TryAddWithoutValidation(nameStr, valueStr))
                     PendingContentHeaders.Add(nameStr, valueStr);
             }
         }
@@ -64,7 +74,7 @@ namespace Sakuno.Nekomimi
                 bool downStreamCompleted = false;
                 try
                 {
-                    builder.Reset(session.Request);
+                    builder.Reset(session);
                     ReadOnlySequence<byte> buffer = result.Buffer;
                     SequencePosition consumed = buffer.Start, examined = buffer.Start;
 
@@ -75,6 +85,29 @@ namespace Sakuno.Nekomimi
                     while (!parser.ParseHeaders(builder, in buffer, out consumed, out examined, out _));
 
                     connection.Input.AdvanceTo(consumed, examined);
+
+                    if (session.IsHTTPS)
+                        using (var upstream = await BuildSSLAsync(builder))
+                        {
+                            if (upstream == null)
+                            {
+                                outputText.Format("HTTP/{0}.{1} 502 Bad Gateway\r\n\r\n",
+                                    session.Request.Version.Major,
+                                    session.Request.Version.Minor);
+                                await outputText.FlushAsync();
+                            }
+                            else
+                            {
+                                outputText.Format("HTTP/{0}.{1} 200 Connection Established\r\n\r\n",
+                                    session.Request.Version.Major,
+                                    session.Request.Version.Minor);
+                                await outputText.FlushAsync();
+                                Task upward = connection.Input.CopyToAsync(upstream.Output),
+                                    downward = upstream.Input.CopyToAsync(connection.Output);
+                                await Task.WhenAll(upward, downward);
+                            }
+                            break;
+                        }
 
                     if (session.Request.Headers.ExpectContinue == true)
                     {
@@ -116,11 +149,10 @@ namespace Sakuno.Nekomimi
                     else
                         response.Headers.TransferEncodingChunked = null;
 
-                    foreach (var headerName in response.Headers.Concat(response.Content.Headers))
-                        foreach (var header in headerName.Value)
-                            outputText.Format("{0}: {1}\r\n",
-                                headerName.Key,
-                                header);
+                    foreach (var header in response.Headers.Concat(response.Content.Headers))
+                        outputText.Format("{0}: {1}\r\n",
+                            header.Key,
+                            string.Join("; ", header.Value));
 
                     outputText.Append("\r\n");
 
