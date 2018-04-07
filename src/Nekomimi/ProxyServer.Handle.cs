@@ -138,7 +138,8 @@ namespace Sakuno.Nekomimi
                     HttpResponseMessage response;
                     try
                     {
-                        response = await _httpClient.SendAsync(session.Request);
+                        response = session.Response ?? await _httpClient.SendAsync(session.Request);
+                        session.RequestSent = true;
                     }
                     catch (Exception ex)
                     {
@@ -202,6 +203,7 @@ namespace Sakuno.Nekomimi
                     }
 
                     await connection.Output.FlushAsync();
+                    session.ResponseSent = true;
                     EatException(AfterResponse, session);
                 }
                 catch (Exception ex)
