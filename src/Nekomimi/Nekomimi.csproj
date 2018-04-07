@@ -7,7 +7,7 @@
     <LangVersion>7.2</LangVersion>
     <RootNamespace>Sakuno.Nekomimi</RootNamespace>
     <AssemblyName>Nekomimi</AssemblyName>
-    <Version>0.1.0-blueprint</Version>
+    <Version>0.2.0-preview-180408</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputPath>$(SolutionDir)artifacts\$(Configuration)\</OutputPath>
     <Authors>Kodama Sakuno</Authors>
