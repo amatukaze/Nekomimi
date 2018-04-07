@@ -46,7 +46,10 @@ namespace Sakuno.Nekomimi
             {
                 string nameStr = new Utf8String(name).ToString(), valueStr = new Utf8String(value).ToString();
                 if (!Session.Request.Headers.TryAddWithoutValidation(nameStr, valueStr))
-                    PendingHeaders.Add(nameStr, valueStr);
+                    if (PendingHeaders.TryGetValue(nameStr, out string existed))
+                        PendingHeaders[nameStr] = existed + "; " + valueStr;
+                    else
+                        PendingHeaders.Add(nameStr, valueStr);
             }
         }
 
