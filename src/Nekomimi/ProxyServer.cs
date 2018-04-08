@@ -8,32 +8,39 @@ namespace Sakuno.Nekomimi
     public partial class ProxyServer : IDisposable
     {
         private readonly SocketListener _listener = new SocketListener();
-        private readonly HttpClient _httpClient;
-        private readonly HttpClientHandler _httpClientHandler = new HttpClientHandler
-        {
-            UseCookies = false,
-            AllowAutoRedirect = false,
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-        };
+        private HttpClient _httpClient;
+        public bool IsStarted { get; private set; }
 
         public ProxyServer()
         {
             _listener.OnConnection(HandleConnection);
-            _httpClient = new HttpClient(_httpClientHandler);
-            _httpClient.DefaultRequestHeaders.Clear();
         }
 
         public void Start(int port)
         {
+            IsStarted = true;
+            _httpClient = new HttpClient(new HttpClientHandler
+            {
+                UseCookies = false,
+                AllowAutoRedirect = false,
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                Proxy = UpstreamProxy,
+                UseProxy = UpstreamProxy != null
+            });
             _listener.Start(new IPEndPoint(IPAddress.Loopback, port));
         }
 
-        public void Stop() => _listener.Stop();
+        public void Stop()
+        {
+            _listener.Stop();
+            _httpClient?.Dispose();
+            IsStarted = false;
+        }
 
         public void Dispose()
         {
             _listener.Dispose();
-            _httpClient.Dispose();
+            _httpClient?.Dispose();
         }
 
         public event Action<Session> BeforeRequest;
@@ -57,11 +64,7 @@ namespace Sakuno.Nekomimi
         public IWebProxy UpstreamProxy
         {
             get => _upstream;
-            set
-            {
-                _httpClientHandler.Proxy = _upstream = value;
-                _httpClientHandler.UseProxy = _upstream != null;
-            }
+            set => _upstream = IsStarted ? throw new InvalidOperationException("Proxy cannot be changed during listening.") : value;
         }
     }
 }
