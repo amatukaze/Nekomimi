@@ -29,5 +29,7 @@ namespace Sakuno.Nekomimi
                 throw new InvalidOperationException("Cannot override response after sent.") :
                 value;
         }
+
+        public object UserData { get; set; }
     }
 }
