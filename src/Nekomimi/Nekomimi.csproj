@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -21,11 +21,11 @@
   </PropertyGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="powershell -ExecutionPolicy Unrestricted -File ..\..\scripts\Execute-PostBuildEvent.ps1 -SolutionDir $(SolutionDir) -ProjectPath $(ProjectPath) -Configuration $(ConfigurationName) -TargetDir $(TargetDir) -TargetPath $(TargetPath)" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Unrestricted -File ..\..\scripts\Execute-PostBuildEvent.ps1 -SolutionDir $(SolutionDir) -ProjectPath $(ProjectPath) -Configuration $(ConfigurationName) -TargetDir $(TargetDir) -TargetPath $(TargetPath)" />
   </Target>
 
   <Target Name="PostPack" AfterTargets="Pack">
-    <Exec Command="powershell -ExecutionPolicy Unrestricted -File ..\..\scripts\Execute-PostPackEvent.ps1 -SolutionDir $(SolutionDir) -PackageId $(PackageId) -PackageVersion $(PackageVersion) -PackageOutputPath $(PackageOutputPath)" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Unrestricted -File ..\..\scripts\Execute-PostPackEvent.ps1 -SolutionDir $(SolutionDir) -PackageId $(PackageId) -PackageVersion $(PackageVersion) -PackageOutputPath $(PackageOutputPath)" />
   </Target>
 
   <ItemGroup>
