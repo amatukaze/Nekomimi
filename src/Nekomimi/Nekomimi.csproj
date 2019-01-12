@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -15,7 +15,7 @@
     <Company>Kodama Sakuno</Company>
     <Copyright>Copyright © 2017-2018 Kodama Sakuno</Copyright>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageLicenseUrl>https://github.com/amatukaze/Nekomimi/blob/master/LICENSE.md</PackageLicenseUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/amatukaze/Nekomimi</PackageProjectUrl>
     <PackageTags>HTTP;Proxy</PackageTags>
   </PropertyGroup>
