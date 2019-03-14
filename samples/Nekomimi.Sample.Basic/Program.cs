@@ -3,13 +3,12 @@ using System.Threading.Tasks;
 
 namespace Sakuno.Nekomimi.Sample.Basic
 {
-    static class Program
+    internal static class Program
     {
-        static TaskCompletionSource<object> _completion;
+        private static TaskCompletionSource<object> _completion;
+        private static ProxyServer _proxyServer;
 
-        static ProxyServer _proxyServer;
-
-        static void Main(string[] args)
+        private static async Task Main(string[] args)
         {
             _completion = new TaskCompletionSource<object>();
 
@@ -24,12 +23,12 @@ namespace Sakuno.Nekomimi.Sample.Basic
 
             Console.WriteLine("Press Ctrl+C to stop...");
 
-            _completion.Task.Wait();
+            await _completion.Task;
 
             _proxyServer.Stop();
         }
 
-        static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
+        private static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
         {
             e.Cancel = true;
 
