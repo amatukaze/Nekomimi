@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Buffers.Text;
 using System.Collections.Generic;
@@ -77,7 +77,7 @@ namespace Sakuno.Nekomimi
                 try
                 {
                     builder.Reset(session);
-                    ReadOnlySequence<byte> buffer = result.Buffer;
+                    var buffer = result.Buffer;
                     SequencePosition consumed = buffer.Start, examined = buffer.Start;
 
                     do buffer = await MoreAsync(connection.Input, consumed, examined);
@@ -122,7 +122,7 @@ namespace Sakuno.Nekomimi
                         && int.TryParse(lengthStr, out var length))
                     {
                         var requestBody = new byte[length];
-                        ArraySegment<byte> remained = new ArraySegment<byte>(requestBody);
+                        var remained = new ArraySegment<byte>(requestBody);
                         while (remained.Count > 0)
                         {
                             int bytesRead = await connection.Input.ReadAsync(remained);
