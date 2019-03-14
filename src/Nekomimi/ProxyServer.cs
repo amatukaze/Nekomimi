@@ -46,6 +46,7 @@ namespace Sakuno.Nekomimi
         public event Action<Session> BeforeRequest;
         public event Action<Session> AfterRequest;
         public event Action<Session> BeforeResponse;
+        public event Action<Session, ReadOnlyMemory<byte>> DataReceiving;
         public event Action<Session> AfterResponse;
         public event Action<Session, Exception> SessionFailed;
         //public event Action<Session, long> SessionProgress;
@@ -56,6 +57,14 @@ namespace Sakuno.Nekomimi
             try
             {
                 handler?.Invoke(session);
+            }
+            catch { }
+        }
+        private void EatException(Action<Session, ReadOnlyMemory<byte>> handler, Session session, ReadOnlyMemory<byte> memory)
+        {
+            try
+            {
+                handler?.Invoke(session, memory);
             }
             catch { }
         }
