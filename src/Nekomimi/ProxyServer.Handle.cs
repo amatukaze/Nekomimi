@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers;
 using System.Buffers.Text;
 using System.Collections.Generic;
@@ -151,7 +151,7 @@ namespace Sakuno.Nekomimi
                             session.Request.Version.Minor);
                         await outputText.FlushAsync();
                         SessionFailed?.Invoke(session, ex);
-                        continue;
+                        break;
                     }
 
                     EatException(AfterRequest, session);
