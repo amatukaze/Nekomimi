@@ -27,6 +27,7 @@ namespace Sakuno.Nekomimi
                 Proxy = UpstreamProxy,
                 UseProxy = UpstreamProxy != null
             });
+            _httpClient.DefaultRequestHeaders.ExpectContinue = false;
             _listener.Start(new IPEndPoint(IPAddress.Loopback, port));
         }
 
