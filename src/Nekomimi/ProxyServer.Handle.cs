@@ -138,11 +138,28 @@ namespace Sakuno.Nekomimi
 
                     EatException(BeforeRequest, session);
 
-                    HttpResponseMessage response;
+                    HttpResponseMessage response = null;
                     try
                     {
-                        response = session.Response ?? await _httpClient.SendAsync(session.Request);
-                        session.RequestSent = true;
+                        while (true)
+                            try
+                            {
+                                response = session.Response ?? await _httpClient.SendAsync(session.Request);
+                                break;
+                            }
+                            catch (HttpRequestException innerException)
+                            {
+                                var e = new RequestFailedEventArgs(innerException);
+                                EatException(RequestFailed, session, e);
+                                if (session.Response != null)
+                                    break;
+                                if (e.RetryDueTime is TimeSpan dueTime)
+                                {
+                                    await Task.Delay(dueTime);
+                                    continue;
+                                }
+                                throw;
+                            }
                     }
                     catch (Exception ex)
                     {
@@ -154,6 +171,7 @@ namespace Sakuno.Nekomimi
                         break;
                     }
 
+                    session.RequestSent = true;
                     EatException(AfterRequest, session);
                     session.Response = response;
                     EatException(BeforeResponse, session);
