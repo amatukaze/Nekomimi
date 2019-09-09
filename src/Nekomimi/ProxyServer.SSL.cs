@@ -1,29 +1,13 @@
-﻿using System;
-using System.Buffers;
+﻿using System.Buffers;
+using System.IO.Pipelines;
 using System.IO.Pipelines.Networking.Sockets;
 using System.Net;
-using System.Text.Http.Parser;
 using System.Threading.Tasks;
 
 namespace Sakuno.Nekomimi
 {
     public partial class ProxyServer
     {
-        private struct ResponseLine : IHttpResponseLineHandler, IHttpHeadersHandler
-        {
-            public ushort Status;
-
-            public void OnHeader(ReadOnlySpan<byte> name, ReadOnlySpan<byte> value) { }
-            public void OnStatusLine(Http.Version version, ushort status, ReadOnlySpan<byte> reason) => Status = status;
-
-            public bool ParseResponse(ref ReadOnlySequence<byte> buffer, out SequencePosition consumed, out SequencePosition examined)
-            {
-                var result = HttpParser.ParseResponseLine(ref this, ref buffer, out int consumedBytes);
-                consumed = examined = buffer.Slice(consumedBytes - 1).Start; //Bug for ParseResponseLine @20180407
-                return result;
-            }
-        }
-
         private async ValueTask<SocketConnection> BuildSSLAsync(RequestBuilder builder)
         {
             var upstream = UpstreamProxy;
@@ -48,7 +32,6 @@ namespace Sakuno.Nekomimi
                     {
                         connection = await SocketConnection.ConnectAsync(new IPEndPoint(upstreamIp, upstreamUri.Port));
                         var output = connection.Output;
-                        var parser = new HttpParser();
 
                         WriteUtf8(output,
                             $"CONNECT {destination.Host}:{destination.Port} HTTP/1.1\r\n");
@@ -61,20 +44,7 @@ namespace Sakuno.Nekomimi
                         WriteUtf8(output, "\r\n");
                         await output.FlushAsync();
 
-                        ResponseLine response = default;
-                        var result = await connection.Input.ReadAsync();
-                        var buffer = result.Buffer;
-                        SequencePosition consumed = buffer.Start, examined = buffer.Start;
-
-                        do buffer = await MoreAsync(connection.Input, consumed, examined);
-                        while (!response.ParseResponse(ref buffer, out consumed, out examined));
-
-                        do buffer = await MoreAsync(connection.Input, consumed, examined);
-                        while (!parser.ParseHeaders(response, buffer, out consumed, out examined, out _));
-
-                        connection.Input.AdvanceTo(consumed, examined);
-
-                        if (response.Status >= 200 && response.Status < 300)
+                        if (await TryGet200Async(connection.Input))
                             return connection;
 
                         await connection.DisposeAsync();
@@ -88,6 +58,47 @@ namespace Sakuno.Nekomimi
             }
 
             return null;
+        }
+
+        private static async ValueTask<bool> TryGet200Async(PipeReader reader)
+        {
+            while (true)
+            {
+                var result = await reader.ReadAsync().ConfigureAwait(false);
+                var buffer = result.Buffer;
+
+                if (buffer.Length > 12)
+                {
+                    var array = buffer.ToArray();
+                    if (array[0] != (byte)'H' ||
+                        array[1] != (byte)'T' ||
+                        array[2] != (byte)'T' ||
+                        array[3] != (byte)'P' ||
+                        array[4] != (byte)'/' ||
+                        array[6] != (byte)'.' ||
+                        array[8] != (byte)' ' ||
+                        array[9] != (byte)'2' ||
+                        array[10] != (byte)'0' ||
+                        array[11] != (byte)'0')
+                        goto fail;
+                    for (int i = 13; i < array.Length; i++)
+                        if (array[i - 1] == (byte)'\r' &&
+                            array[i] == (byte)'\n')
+                        {
+                            for (int j = i + 2; j < array.Length; j++)
+                                if (array[j - 1] == (byte)'\r' &&
+                                    array[j] == (byte)'\n')
+                                {
+                                    reader.AdvanceTo(buffer.Slice(j + 1).Start);
+                                    return true;
+                                }
+                            goto fail;
+                        }
+                }
+fail:
+                if (result.IsCompleted)
+                    return false;
+            }
         }
     }
 }

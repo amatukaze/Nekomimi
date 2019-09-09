@@ -4,9 +4,10 @@ using System.Collections.Generic;
 using System.IO.Pipelines;
 using System.Linq;
 using System.Net.Http;
-using System.Text.Http.Parser;
-using System.Text.Utf8;
+using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http;
+using HttpMethod = Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpMethod;
 
 namespace Sakuno.Nekomimi
 {
@@ -22,26 +23,26 @@ namespace Sakuno.Nekomimi
                 PendingHeaders.Clear();
             }
 
-            public void OnStartLine(Http.Method method, Http.Version version, ReadOnlySpan<byte> target, ReadOnlySpan<byte> path, ReadOnlySpan<byte> query, ReadOnlySpan<byte> customMethod, bool pathEncoded)
+            public void OnStartLine(HttpMethod method, HttpVersion version, Span<byte> target, Span<byte> path, Span<byte> query, Span<byte> customMethod, bool pathEncoded)
             {
                 Session.Request = new HttpRequestMessage
                 {
-                    Method = HttpConstants.MapMethod(method) ?? new HttpMethod(new Utf8String(customMethod).ToString()),
+                    Method = HttpConstants.MapMethod(method) ?? new System.Net.Http.HttpMethod(Encoding.UTF8.GetString(customMethod.ToArray())),
                     Version = HttpConstants.MapVersion(version),
                 };
 
-                if (method == Http.Method.Connect)
+                if (method == HttpMethod.Connect)
                 {
                     Session.IsHTTPS = true;
-                    Session.Request.RequestUri = new Uri("https://" + new Utf8String(target));
+                    Session.Request.RequestUri = new Uri("https://" + Encoding.UTF8.GetString(target.ToArray()));
                 }
                 else
-                    Session.Request.RequestUri = new Uri(new Utf8String(target).ToString());
+                    Session.Request.RequestUri = new Uri(Encoding.UTF8.GetString(target.ToArray()));
             }
 
-            public void OnHeader(ReadOnlySpan<byte> name, ReadOnlySpan<byte> value)
+            public void OnHeader(Span<byte> name, Span<byte> value)
             {
-                string nameStr = new Utf8String(name).ToString(), valueStr = new Utf8String(value).ToString();
+                string nameStr = Encoding.UTF8.GetString(name.ToArray()), valueStr = Encoding.UTF8.GetString(value.ToArray());
                 if (!Session.Request.Headers.TryAddWithoutValidation(nameStr, valueStr))
                     if (PendingHeaders.TryGetValue(nameStr, out string existed))
                         PendingHeaders[nameStr] = existed + "; " + valueStr;
@@ -61,7 +62,6 @@ namespace Sakuno.Nekomimi
 
         private async Task HandleConnection(IDuplexPipe connection)
         {
-            var parser = new HttpParser(true);
             var output = connection.Output;
             RequestBuilder builder = default;
             builder.PendingHeaders = new Dictionary<string, string>(10);
@@ -73,6 +73,7 @@ namespace Sakuno.Nekomimi
                 var session = new Session();
                 try
                 {
+                    var parser = new HttpParser<RequestBuilder>();
                     builder.Reset(session);
                     var buffer = result.Buffer;
                     SequencePosition consumed = buffer.Start, examined = buffer.Start;
@@ -126,11 +127,7 @@ namespace Sakuno.Nekomimi
                                 throw new FormatException("Incomplete request content");
                             if (b.Length > remained.Length)
                                 b = b.Slice(0, remained.Length);
-                            foreach (var sec in b)
-                            {
-                                sec.CopyTo(remained);
-                                remained = remained.Slice(sec.Length);
-                            }
+                            b.CopyTo(remained.Span);
                             connection.Input.AdvanceTo(b.End);
                         }
 
@@ -237,10 +234,6 @@ namespace Sakuno.Nekomimi
                     SessionFailed?.Invoke(session, ex);
                     break;
                 }
-                finally
-                {
-                    parser.Reset();
-                }
             }
         }
 
@@ -266,6 +259,6 @@ namespace Sakuno.Nekomimi
         }
 
         private static void WriteUtf8(PipeWriter writer, string @string)
-            => writer.Write(System.Text.Encoding.UTF8.GetBytes(@string));
+            => writer.Write(Encoding.UTF8.GetBytes(@string));
     }
 }

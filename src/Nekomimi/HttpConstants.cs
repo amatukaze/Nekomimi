@@ -1,54 +1,37 @@
 ﻿using System;
 using System.Net.Http;
-using System.Text.Http.Parser;
+using KestrelMethod = Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpMethod;
+using KestrelVersion = Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpVersion;
 
 namespace Sakuno.Nekomimi
 {
     internal static class HttpConstants
     {
-        public static HttpMethod MapMethod(Http.Method method)
-        {
-            switch (method)
+        public static HttpMethod MapMethod(KestrelMethod method)
+            => method switch
             {
-                case Http.Method.Get:
-                    return HttpMethod.Get;
-                case Http.Method.Put:
-                    return HttpMethod.Put;
-                case Http.Method.Delete:
-                    return HttpMethod.Delete;
-                case Http.Method.Post:
-                    return HttpMethod.Post;
-                case Http.Method.Head:
-                    return HttpMethod.Head;
-                case Http.Method.Trace:
-                    return HttpMethod.Trace;
-                case Http.Method.Patch:
-                    return new HttpMethod("PATCH");
-                case Http.Method.Connect:
-                    return new HttpMethod("CONNECT");
-                case Http.Method.Options:
-                    return new HttpMethod("OPTIONS");
-                default:
-                    return null;
-            }
-        }
+                KestrelMethod.Get => HttpMethod.Get,
+                KestrelMethod.Put => HttpMethod.Put,
+                KestrelMethod.Delete => HttpMethod.Delete,
+                KestrelMethod.Post => HttpMethod.Post,
+                KestrelMethod.Head => HttpMethod.Head,
+                KestrelMethod.Trace => HttpMethod.Trace,
+                KestrelMethod.Patch => new HttpMethod("PATCH"),
+                KestrelMethod.Connect => new HttpMethod("CONNECT"),
+                KestrelMethod.Options => new HttpMethod("OPTIONS"),
+                _ => null,
+            };
 
         private static Version Version10 { get; } = new Version(1, 0);
         private static Version Version11 { get; } = new Version(1, 1);
         private static Version Version20 { get; } = new Version(2, 0);
-        public static Version MapVersion(Http.Version version)
-        {
-            switch (version)
+        public static Version MapVersion(KestrelVersion version)
+            => version switch
             {
-                case Http.Version.Http10:
-                    return Version10;
-                case Http.Version.Http11:
-                    return Version11;
-                case Http.Version.Http20:
-                    return Version20;
-                default:
-                    throw new FormatException("Unknown http version");
-            }
-        }
+                KestrelVersion.Http10 => Version10,
+                KestrelVersion.Http11 => Version11,
+                KestrelVersion.Http2 => Version20,
+                _ => throw new FormatException("Unknown http version"),
+            };
     }
 }

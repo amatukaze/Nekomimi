@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <OutputType>Library</OutputType>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <LangVersion>7.2</LangVersion>
+    <LangVersion>8.0</LangVersion>
     <RootNamespace>Sakuno.Nekomimi</RootNamespace>
     <AssemblyName>Nekomimi</AssemblyName>
     <Version>0.2.0-preview-180408</Version>
@@ -29,8 +29,8 @@
   </Target>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Server.Kestrel.Core" Version="2.2.0" />
     <PackageReference Include="System.IO.Pipelines.Networking.Sockets" Version="0.1.0-preview2-180503-5" />
-    <PackageReference Include="System.Text.Http" Version="0.1.0-preview2-180523-2" />
   </ItemGroup>
 
 </Project>
