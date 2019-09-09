@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Buffers;
-using System.Buffers.Text;
 using System.IO.Pipelines.Networking.Sockets;
-using System.IO.Pipelines.Text.Primitives;
 using System.Net;
-using System.Text.Formatting;
 using System.Text.Http.Parser;
 using System.Threading.Tasks;
 
@@ -50,22 +47,19 @@ namespace Sakuno.Nekomimi
                     try
                     {
                         connection = await SocketConnection.ConnectAsync(new IPEndPoint(upstreamIp, upstreamUri.Port));
-                        var outputText = connection.Output.AsTextOutput(SymbolTable.InvariantUtf8);
+                        var output = connection.Output;
                         var parser = new HttpParser();
 
-                        outputText.Format("CONNECT {0}:{1} HTTP/1.1\r\n",
-                                destination.Host,
-                                destination.Port);
+                        WriteUtf8(output,
+                            $"CONNECT {destination.Host}:{destination.Port} HTTP/1.1\r\n");
                         foreach (var header in request.Headers)
-                            outputText.Format("{0}: {1}\r\n",
-                                header.Key,
-                                string.Join("; ", header.Value));
+                            WriteUtf8(output,
+                                $"{header.Key}: {string.Join("; ", header.Value)}\r\n");
                         foreach (var header in builder.PendingHeaders)
-                            outputText.Format("{0}: {1}\r\n",
-                                header.Key,
-                                header.Value);
-                        outputText.Append("\r\n");
-                        await outputText.FlushAsync();
+                            WriteUtf8(output,
+                                $"{header.Key}: {string.Join("; ", header.Value)}\r\n");
+                        WriteUtf8(output, "\r\n");
+                        await output.FlushAsync();
 
                         ResponseLine response = default;
                         var result = await connection.Input.ReadAsync();

@@ -30,7 +30,6 @@
 
   <ItemGroup>
     <PackageReference Include="System.IO.Pipelines.Networking.Sockets" Version="0.1.0-preview2-180503-5" />
-    <PackageReference Include="System.IO.Pipelines.Text.Primitives" Version="0.1.0-preview2-180503-5" />
     <PackageReference Include="System.Text.Http" Version="0.1.0-preview2-180523-2" />
   </ItemGroup>
 

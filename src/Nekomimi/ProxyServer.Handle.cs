@@ -1,12 +1,9 @@
 ﻿using System;
 using System.Buffers;
-using System.Buffers.Text;
 using System.Collections.Generic;
 using System.IO.Pipelines;
-using System.IO.Pipelines.Text.Primitives;
 using System.Linq;
 using System.Net.Http;
-using System.Text.Formatting;
 using System.Text.Http.Parser;
 using System.Text.Utf8;
 using System.Threading.Tasks;
@@ -65,7 +62,7 @@ namespace Sakuno.Nekomimi
         private async Task HandleConnection(IDuplexPipe connection)
         {
             var parser = new HttpParser(true);
-            var outputText = connection.Output.AsTextOutput(SymbolTable.InvariantUtf8);
+            var output = connection.Output;
             RequestBuilder builder = default;
             builder.PendingHeaders = new Dictionary<string, string>(10);
 
@@ -93,20 +90,18 @@ namespace Sakuno.Nekomimi
                         {
                             if (upstream == null)
                             {
-                                outputText.Format("HTTP/{0}.{1} 502 Bad Gateway\r\n\r\n",
-                                    session.Request.Version.Major,
-                                    session.Request.Version.Minor);
-                                await outputText.FlushAsync();
+                                WriteUtf8(output,
+                                    $"HTTP/{session.Request.Version.Major}.{session.Request.Version.Minor} 502 Bad Gateway\r\n\r\n");
+                                await output.FlushAsync();
                             }
                             else
                             {
-                                outputText.Format("HTTP/{0}.{1} 200 Connection Established\r\n\r\n",
-                                    session.Request.Version.Major,
-                                    session.Request.Version.Minor);
-                                await outputText.FlushAsync();
+                                WriteUtf8(output,
+                                    $"HTTP/{session.Request.Version.Major}.{session.Request.Version.Minor} 200 Connection Established\r\n\r\n");
+                                await output.FlushAsync();
                                 EatException(SslConnecting, session);
-                                Task upward = connection.Input.CopyToAsync(upstream.Output),
-                                    downward = upstream.Input.CopyToAsync(connection.Output);
+                                Task upward = CopyAsync(connection.Input, upstream.Output),
+                                    downward = CopyAsync(upstream.Input, connection.Output);
                                 await Task.WhenAll(upward, downward);
                             }
                             break;
@@ -114,7 +109,7 @@ namespace Sakuno.Nekomimi
 
                     if (session.Request.Headers.ExpectContinue == true)
                     {
-                        outputText.Append("100 Continue\r\n");
+                        WriteUtf8(output, "100 Continue\r\n");
                         await connection.Output.FlushAsync();
                     }
 
@@ -122,13 +117,21 @@ namespace Sakuno.Nekomimi
                         && int.TryParse(lengthStr, out var length))
                     {
                         var requestBody = new byte[length];
-                        var remained = new ArraySegment<byte>(requestBody);
-                        while (remained.Count > 0)
+                        var remained = requestBody.AsMemory();
+                        while (remained.Length > 0)
                         {
-                            int bytesRead = await connection.Input.ReadAsync(remained);
-                            if (bytesRead == 0)
+                            var r = await connection.Input.ReadAsync();
+                            var b = r.Buffer;
+                            if (r.IsCompleted && b.IsEmpty)
                                 throw new FormatException("Incomplete request content");
-                            remained = new ArraySegment<byte>(requestBody, remained.Offset + bytesRead, remained.Count - bytesRead);
+                            if (b.Length > remained.Length)
+                                b = b.Slice(0, remained.Length);
+                            foreach (var sec in b)
+                            {
+                                sec.CopyTo(remained);
+                                remained = remained.Slice(sec.Length);
+                            }
+                            connection.Input.AdvanceTo(b.End);
                         }
 
                         session.Request.Content = new ByteArrayContent(requestBody);
@@ -163,10 +166,9 @@ namespace Sakuno.Nekomimi
                     }
                     catch (Exception ex)
                     {
-                        outputText.Format("HTTP/{0}.{1} 502 Bad Gateway\r\n\r\n",
-                            session.Request.Version.Major,
-                            session.Request.Version.Minor);
-                        await outputText.FlushAsync();
+                        WriteUtf8(output,
+                            $"HTTP/{session.Request.Version.Major}.{session.Request.Version.Minor} 502 Bad Gateway\r\n\r\n");
+                        await output.FlushAsync();
                         SessionFailed?.Invoke(session, ex);
                         break;
                     }
@@ -176,11 +178,8 @@ namespace Sakuno.Nekomimi
                     session.Response = response;
                     EatException(BeforeResponse, session);
 
-                    outputText.Format("HTTP/{0}.{1} {2} {3}\r\n",
-                        response.Version.Major,
-                        response.Version.Minor,
-                        (int)response.StatusCode,
-                        response.ReasonPhrase);
+                    WriteUtf8(output,
+                        $"HTTP/{response.Version.Major}.{response.Version.Minor} {(int)response.StatusCode} {response.ReasonPhrase}\r\n");
 
                     if (response.Content.Headers.ContentLength == null)
                         response.Headers.TransferEncodingChunked = true;
@@ -188,11 +187,10 @@ namespace Sakuno.Nekomimi
                         response.Headers.TransferEncodingChunked = false;
 
                     foreach (var header in response.Headers.Concat(response.Content.Headers))
-                        outputText.Format("{0}: {1}\r\n",
-                            header.Key,
-                            string.Join("; ", header.Value));
+                        WriteUtf8(output,
+                            $"{header.Key}: {string.Join("; ", header.Value)}\r\n");
 
-                    outputText.Append("\r\n");
+                    WriteUtf8(output, "\r\n");
 
                     if (response.Content != null)
                     {
@@ -216,10 +214,10 @@ namespace Sakuno.Nekomimi
                                     bytesRead = await contentStream.ReadAsync(sendBuffer, 0, sendBuffer.Length);
                                     var memory = new ReadOnlyMemory<byte>(sendBuffer, 0, bytesRead);
                                     EatException(DataReceiving, session, memory);
-                                    outputText.Append(bytesRead, 'x');
-                                    outputText.Append("\r\n");
+                                    WriteUtf8(output, bytesRead.ToString("x"));
+                                    WriteUtf8(output, "\r\n");
                                     await connection.Output.WriteAsync(memory);
-                                    outputText.Append("\r\n");
+                                    WriteUtf8(output, "\r\n");
                                 }
                                 while (bytesRead > 0);
                         }
@@ -245,5 +243,29 @@ namespace Sakuno.Nekomimi
                 }
             }
         }
+
+        private static async Task CopyAsync(PipeReader reader, PipeWriter writer)
+        {
+            while (true)
+            {
+                var result = await reader.ReadAsync().ConfigureAwait(false);
+                var buffer = result.Buffer;
+                try
+                {
+                    if (result.IsCompleted && buffer.IsEmpty)
+                        return;
+                    foreach (var m in buffer)
+                        writer.Write(m.Span);
+                    await writer.FlushAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    reader.AdvanceTo(buffer.End);
+                }
+            }
+        }
+
+        private static void WriteUtf8(PipeWriter writer, string @string)
+            => writer.Write(System.Text.Encoding.UTF8.GetBytes(@string));
     }
 }
