@@ -60,6 +60,9 @@ namespace Sakuno.Nekomimi
             return result.Buffer;
         }
 
+        protected override Task OnClientConnectedAsync(in ClientConnection client)
+            => HandleConnection(client.Transport);
+
         private async Task HandleConnection(IDuplexPipe connection)
         {
             var output = connection.Output;

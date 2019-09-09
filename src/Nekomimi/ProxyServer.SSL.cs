@@ -1,8 +1,8 @@
 ﻿using System.Buffers;
 using System.IO.Pipelines;
-using System.IO.Pipelines.Networking.Sockets;
 using System.Net;
 using System.Threading.Tasks;
+using Pipelines.Sockets.Unofficial;
 
 namespace Sakuno.Nekomimi
 {
@@ -47,12 +47,12 @@ namespace Sakuno.Nekomimi
                         if (await TryGet200Async(connection.Input))
                             return connection;
 
-                        await connection.DisposeAsync();
+                        connection.Dispose();
                     }
                     catch
                     {
                         if (connection != null)
-                            await connection.DisposeAsync();
+                            connection.Dispose();
                     }
                 }
             }

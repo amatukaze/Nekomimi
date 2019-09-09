@@ -30,7 +30,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Server.Kestrel.Core" Version="2.2.0" />
-    <PackageReference Include="System.IO.Pipelines.Networking.Sockets" Version="0.1.0-preview2-180503-5" />
+    <PackageReference Include="Pipelines.Sockets.Unofficial" Version="2.0.25" />
   </ItemGroup>
 
 </Project>

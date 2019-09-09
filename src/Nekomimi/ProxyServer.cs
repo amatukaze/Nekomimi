@@ -1,20 +1,14 @@
 ﻿using System;
-using System.IO.Pipelines.Networking.Sockets;
 using System.Net;
 using System.Net.Http;
+using Pipelines.Sockets.Unofficial;
 
 namespace Sakuno.Nekomimi
 {
-    public partial class ProxyServer : IDisposable
+    public partial class ProxyServer : SocketServer
     {
-        private readonly SocketListener _listener = new SocketListener();
         private HttpClient _httpClient;
         public bool IsStarted { get; private set; }
-
-        public ProxyServer()
-        {
-            _listener.OnConnection(HandleConnection);
-        }
 
         public void Start(int port)
         {
@@ -28,19 +22,19 @@ namespace Sakuno.Nekomimi
                 UseProxy = UpstreamProxy != null
             });
             _httpClient.DefaultRequestHeaders.ExpectContinue = false;
-            _listener.Start(new IPEndPoint(IPAddress.Loopback, port));
+            Listen(new IPEndPoint(IPAddress.Loopback, port));
         }
 
-        public void Stop()
+        public new void Stop()
         {
-            _listener.Stop();
+            base.Stop();
             _httpClient?.Dispose();
             IsStarted = false;
         }
 
-        public void Dispose()
+        protected override void Dispose(bool disposing)
         {
-            _listener.Dispose();
+            base.Dispose(disposing);
             _httpClient?.Dispose();
         }
 
