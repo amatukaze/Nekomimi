@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -52,6 +53,48 @@ namespace Nekomimi
         private async void HandleClientSocketAsync(object state)
         {
             var clientSocket = (Socket)state;
+
+            var session = new HttpSession();
+
+            var buffer = ArrayPool<byte>.Shared.Rent(4096);
+
+            try
+            {
+                var offset = 0;
+                var success = false;
+
+                while (true)
+                {
+#if NETSTANDARD2_1
+                    var length = await clientSocket.ReceiveAsync(buffer.AsMemory(offset), SocketFlags.None).ConfigureAwait(false);
+#else
+                    var length = await clientSocket.ReceiveAsync(new ArraySegment<byte>(buffer, offset, buffer.Length - offset), SocketFlags.None).ConfigureAwait(false);
+#endif
+
+                    success = session.Request.Parse(buffer.AsSpan(0, length + offset), out var consumed);
+                    if (success)
+                        break;
+
+                    if (consumed > 0)
+                    {
+                        offset = length - consumed;
+                        buffer.AsSpan(consumed, length - consumed).CopyTo(buffer);
+                        continue;
+                    }
+
+                    offset = buffer.Length;
+
+                    var largerBuffer = ArrayPool<byte>.Shared.Rent(offset * 2);
+
+                    Buffer.BlockCopy(buffer, 0, largerBuffer, 0, offset);
+                    ArrayPool<byte>.Shared.Return(buffer, true);
+                    buffer = largerBuffer;
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer, true);
+            }
         }
 
         public void Stop()
