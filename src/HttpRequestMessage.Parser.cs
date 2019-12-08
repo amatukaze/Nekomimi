@@ -8,33 +8,21 @@ namespace Nekomimi
         private const byte ByteCr = 0x0D;
         private const byte ByteLf = 0x0A;
 
-        private enum State
-        {
-            Method,
-            RequestUri,
-            Version,
-            Header,
-            HeaderEnd,
-            Body,
+        internal HttpRequestMessageState State { get; set; }
 
-            End,
-        }
 
-        private State _state;
-
-        internal bool Parse(ReadOnlySpan<byte> data, out int consumed)
+        internal bool ParseStartLineAndHeaders(ReadOnlySpan<byte> data, out int consumed)
         {
             consumed = 0;
 
-            while (_state != State.End)
+            while (State != HttpRequestMessageState.HeadersParsed)
             {
-                var currentConsumed = _state switch
+                var currentConsumed = State switch
                 {
-                    State.Method => ParseMethod(data),
-                    State.RequestUri => ParseRequestUri(data),
-                    State.Version => ParseVersion(data),
-                    State.Header => ParseHeader(data),
-                    State.Body => ParseBody(data),
+                    HttpRequestMessageState.ParsingMethod => ParseMethod(data),
+                    HttpRequestMessageState.ParsingRequestUri => ParseRequestUri(data),
+                    HttpRequestMessageState.ParsingVersion => ParseVersion(data),
+                    HttpRequestMessageState.ParsingHeader => ParseHeader(data),
 
                     _ => throw new InvalidOperationException(),
                 };
@@ -42,8 +30,8 @@ namespace Nekomimi
                 if (currentConsumed == 0)
                     return false;
 
-                if (_state != State.Header)
-                    _state++;
+                if (State < HttpRequestMessageState.ParsingHeader)
+                    State++;
 
                 consumed += currentConsumed;
                 data = data.Slice(currentConsumed);
@@ -63,7 +51,7 @@ namespace Nekomimi
         private int ParseKnownMethod(ReadOnlySpan<byte> data)
         {
             if (data.Length < 4)
-                return default;
+                return 0;
 
             var first4Bytes = data.ReadInt();
             switch (first4Bytes)
@@ -78,7 +66,7 @@ namespace Nekomimi
             }
 
             if (data.Length < 8)
-                return default;
+                return 0;
 
             var second4Bytes = data.Slice(4).ReadInt();
             switch (second4Bytes)
@@ -163,7 +151,7 @@ namespace Nekomimi
 
             if (data.ReadShort() == 0x0A0D)
             {
-                _state = State.HeaderEnd;
+                State = HttpRequestMessageState.HeadersParsed;
                 return 2;
             }
 

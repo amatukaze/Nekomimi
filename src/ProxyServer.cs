@@ -53,15 +53,18 @@ namespace Nekomimi
         private async void HandleClientSocketAsync(object state)
         {
             var clientSocket = (Socket)state;
-
             var session = new HttpSession();
 
+            await HandleRequestMessage(session.Request, clientSocket);
+
+        }
+        private async ValueTask HandleRequestMessage(HttpRequestMessage request, Socket clientSocket)
+        {
             var buffer = ArrayPool<byte>.Shared.Rent(4096);
 
             try
             {
                 var offset = 0;
-                var success = false;
 
                 while (true)
                 {
@@ -70,9 +73,7 @@ namespace Nekomimi
 #else
                     var length = await clientSocket.ReceiveAsync(new ArraySegment<byte>(buffer, offset, buffer.Length - offset), SocketFlags.None).ConfigureAwait(false);
 #endif
-
-                    success = session.Request.Parse(buffer.AsSpan(0, length + offset), out var consumed);
-                    if (success)
+                    if (request.ParseStartLineAndHeaders(buffer.AsSpan(0, length + offset), out var consumed))
                         break;
 
                     if (consumed > 0)
