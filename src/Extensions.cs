@@ -9,7 +9,7 @@ namespace Nekomimi
     {
         public static short ReadShort(this ReadOnlySpan<byte> span)
         {
-            var result = Unsafe.As<byte, short>(ref Unsafe.AsRef(in MemoryMarshal.GetReference(span)));
+            var result = Unsafe.ReadUnaligned<short>(ref MemoryMarshal.GetReference(span));
 
             if (!BitConverter.IsLittleEndian)
                 result = BinaryPrimitives.ReverseEndianness(result);
@@ -18,7 +18,7 @@ namespace Nekomimi
         }
         public static int ReadInt(this ReadOnlySpan<byte> span)
         {
-            var result = Unsafe.As<byte, int>(ref Unsafe.AsRef(in MemoryMarshal.GetReference(span)));
+            var result = Unsafe.ReadUnaligned<int>(ref MemoryMarshal.GetReference(span));
 
             if (!BitConverter.IsLittleEndian)
                 result = BinaryPrimitives.ReverseEndianness(result);
@@ -27,7 +27,7 @@ namespace Nekomimi
         }
         public static long ReadLong(this ReadOnlySpan<byte> span)
         {
-            var result = Unsafe.As<byte, long>(ref Unsafe.AsRef(in MemoryMarshal.GetReference(span)));
+            var result = Unsafe.ReadUnaligned<long>(ref MemoryMarshal.GetReference(span));
 
             if (!BitConverter.IsLittleEndian)
                 result = BinaryPrimitives.ReverseEndianness(result);
