@@ -1,4 +1,4 @@
-﻿namespace Nekomimi
+﻿namespace Sakuno.Nekomimi
 {
     public enum HttpVersion
     {

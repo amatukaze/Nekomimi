@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Nekomimi
+namespace Sakuno.Nekomimi
 {
     public sealed partial class HttpRequestMessage
     {

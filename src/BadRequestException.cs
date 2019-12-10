@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Nekomimi
+namespace Sakuno.Nekomimi
 {
     public class BadRequestException : Exception
     {

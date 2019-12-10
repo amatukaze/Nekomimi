@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Nekomimi
+namespace Sakuno.Nekomimi
 {
     public class ProxyServer
     {
