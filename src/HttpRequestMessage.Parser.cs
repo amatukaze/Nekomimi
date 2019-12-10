@@ -77,6 +77,7 @@ namespace Nekomimi
 
                 case 0x20544345:
                     _method = HttpMethod.Connect;
+                    IsHttps = true;
                     return 8;
             }
 
@@ -121,6 +122,12 @@ namespace Nekomimi
             var result = data.IndexOf(ByteSpace);
             if (result == 0)
                 throw new BadRequestException();
+
+            var requestUri = data.Slice(0, result).GetAsciiString();
+            if (IsHttps)
+                requestUri = "https://" + requestUri;
+
+            _requestUri = new Uri(requestUri);
 
             return result + 1;
         }

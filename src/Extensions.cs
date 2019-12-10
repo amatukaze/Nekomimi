@@ -2,6 +2,7 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Nekomimi
 {
@@ -33,6 +34,16 @@ namespace Nekomimi
                 result = BinaryPrimitives.ReverseEndianness(result);
 
             return result;
+        }
+
+        public static unsafe string GetAsciiString(this ReadOnlySpan<byte> span)
+        {
+#if NETSTANDARD2_1
+            return Encoding.ASCII.GetString(span);
+#else
+            fixed (byte* ptr = span)
+                return Encoding.ASCII.GetString(ptr, span.Length);
+#endif
         }
     }
 }

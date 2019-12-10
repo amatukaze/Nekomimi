@@ -1,7 +1,9 @@
-﻿using System;
+using System;
 using System.Buffers;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -90,6 +92,100 @@ namespace Nekomimi
                     Buffer.BlockCopy(buffer, 0, largerBuffer, 0, offset);
                     ArrayPool<byte>.Shared.Return(buffer, true);
                     buffer = largerBuffer;
+                }
+
+                if (request.IsHttps)
+                {
+                    // Currently we don't provide SSL decryption
+
+                    using var upstreamSocket = await BuildSSLConnectionAsync(request).ConfigureAwait(false);
+
+                    if (upstreamSocket == null)
+                        throw new InvalidOperationException();
+
+                    ReadOnlyMemory<byte> response = new[]
+                    {
+                        (byte)'H', (byte)'T', (byte)'T', (byte)'P', (byte)'/', (byte)'1', (byte)'.', (byte)'1', (byte)' ',
+                        (byte)'2', (byte)'0', (byte)'0', (byte)' ',
+                        (byte)'C', (byte)'o', (byte)'n', (byte)'n', (byte)'e', (byte)'c', (byte)'t', (byte)'i', (byte)'o', (byte)'n', (byte)' ',
+                        (byte)'E', (byte)'s', (byte)'t', (byte)'a', (byte)'b', (byte)'l', (byte)'i', (byte)'s', (byte)'h', (byte)'e', (byte)'d',
+                        (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n',
+                    };
+
+#if NETSTANDARD2_1
+                    await clientSocket.SendAsync(response, SocketFlags.None).ConfigureAwait(false);
+#else
+                    MemoryMarshal.TryGetArray(response, out var segment);
+
+                    await clientSocket.SendAsync(segment, SocketFlags.None).ConfigureAwait(false);
+#endif
+
+                    await Task.WhenAll(
+                        BuildTunnelAsync(clientSocket, upstreamSocket),
+                        BuildTunnelAsync(upstreamSocket, clientSocket)
+                    ).ConfigureAwait(false);
+
+                    return;
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer, true);
+            }
+        }
+        private async ValueTask<Socket?> BuildSSLConnectionAsync(HttpRequestMessage request)
+        {
+            // TODO: Connection Pool
+
+            var destination = request.RequestUri;
+
+            if (IPAddress.TryParse(destination.DnsSafeHost, out var address))
+                return await ConnectAsync(address, destination.Port).ConfigureAwait(false);
+
+            foreach (var resolvedAddress in await Dns.GetHostAddressesAsync(destination.DnsSafeHost))
+                try
+                {
+                    return await ConnectAsync(resolvedAddress, destination.Port).ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    Debug.WriteLine(e.Message);
+                }
+
+            return null;
+
+            static async ValueTask<Socket> ConnectAsync(IPAddress address, int port)
+            {
+                var result = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+                await result.ConnectAsync(address, port).ConfigureAwait(false);
+
+                return result;
+            }
+        }
+        private async Task BuildTunnelAsync(Socket source, Socket destination)
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(8192);
+
+            try
+            {
+                while (true)
+                {
+#if NETSTANDARD2_1
+                    var length = await source.ReceiveAsync(buffer.AsMemory(), SocketFlags.None).ConfigureAwait(false);
+#else
+                    var length = await source.ReceiveAsync(new ArraySegment<byte>(buffer, 0, buffer.Length), SocketFlags.None).ConfigureAwait(false);
+#endif
+
+                    if (length == 0)
+                        return;
+
+#if NETSTANDARD2_1
+                    await destination.SendAsync(buffer.AsMemory(0, length), SocketFlags.None).ConfigureAwait(false);
+#else
+
+                    await destination.SendAsync(new ArraySegment<byte>(buffer, 0, length), SocketFlags.None).ConfigureAwait(false);
+#endif
                 }
             }
             finally
