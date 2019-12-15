@@ -1,4 +1,6 @@
-using System;
+﻿using System;
+using System.Diagnostics;
+using System.Text;
 
 namespace Sakuno.Nekomimi
 {
@@ -156,6 +158,8 @@ namespace Sakuno.Nekomimi
             if (data.Length < 2)
                 return 0;
 
+            _headers ??= new HttpHeaderCollection();
+
             if (data.ReadShort() == 0x0A0D)
             {
                 State = HttpRequestMessageState.HeadersParsed;
@@ -165,6 +169,20 @@ namespace Sakuno.Nekomimi
             var offset = data.IndexOf(new[] { ByteCr, ByteLf });
             if (offset == -1)
                 return 0;
+
+            var nameLength = data.IndexOf((byte)':');
+            if (nameLength == -1)
+                return 0;
+
+            var name = data.Slice(0, nameLength);
+
+            var valueOffset = nameLength + 1;
+            if (data[valueOffset] == ByteSpace)
+                valueOffset++;
+
+            var value = data.Slice(valueOffset, offset - valueOffset);
+
+            _headers.Add(name.GetAsciiString(), value.GetAsciiString());
 
             return offset + 2;
         }

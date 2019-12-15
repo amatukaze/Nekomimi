@@ -1,4 +1,4 @@
-namespace Sakuno.Nekomimi
+﻿namespace Sakuno.Nekomimi
 {
     internal enum HttpRequestMessageState
     {

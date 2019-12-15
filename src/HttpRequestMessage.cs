@@ -44,5 +44,19 @@ namespace Sakuno.Nekomimi
         }
 
         public bool IsHttps { get; internal set; }
+
+        private HttpHeaderCollection? _headers;
+        public HttpHeaderCollection Headers
+        {
+            get
+            {
+                if (State <= HttpRequestMessageState.ParsingHeader)
+                    throw new InvalidOperationException();
+
+                Debug.Assert(_headers != null);
+
+                return _headers!;
+            }
+        }
     }
 }
