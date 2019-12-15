@@ -39,6 +39,13 @@ namespace Sakuno.Nekomimi
                 data = data.Slice(currentConsumed);
             }
 
+            Debug.Assert(_headers != null);
+
+            if (_headers.TryGetValue("Expect", out var expect) && expect == "100-continue")
+                State = HttpRequestMessageState.HandlingExpect100Continue;
+            else
+                State = HttpRequestMessageState.ReadingBody;
+
             return true;
         }
 

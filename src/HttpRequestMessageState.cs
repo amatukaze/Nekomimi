@@ -8,6 +8,7 @@
         ParsingHeader,
         HeadersParsed,
 
+        HandlingExpect100Continue,
         ReadingBody,
 
         MessageParsed,

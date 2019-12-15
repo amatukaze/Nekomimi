@@ -78,7 +78,10 @@ namespace Sakuno.Nekomimi
                     var length = await clientSocket.ReceiveAsync(new ArraySegment<byte>(buffer, offset, buffer.Length - offset), SocketFlags.None).ConfigureAwait(false);
 #endif
                     if (request.ParseStartLineAndHeaders(buffer.AsSpan(0, length + offset), out var consumed))
+                    {
+                        offset = consumed;
                         break;
+                    }
 
                     if (consumed > 0)
                     {
@@ -128,6 +131,35 @@ namespace Sakuno.Nekomimi
                     ).ConfigureAwait(false);
 
                     return;
+                }
+
+                if (request.State == HttpRequestMessageState.HandlingExpect100Continue)
+                {
+                    ReadOnlyMemory<byte> response = new[]
+                    {
+                        (byte)'H', (byte)'T', (byte)'T', (byte)'P', (byte)'/', (byte)'1', (byte)'.', (byte)'1', (byte)' ',
+                        (byte)'1', (byte)'0', (byte)'0', (byte)' ',
+                        (byte)'C', (byte)'o', (byte)'n', (byte)'t', (byte)'i', (byte)'n', (byte)'u', (byte)'e',
+                        (byte)'\r', (byte)'\n'
+                    };
+
+#if NETSTANDARD2_1
+                    await clientSocket.SendAsync(response, SocketFlags.None).ConfigureAwait(false);
+#else
+                    MemoryMarshal.TryGetArray(response, out var segment);
+
+                    await clientSocket.SendAsync(segment, SocketFlags.None).ConfigureAwait(false);
+#endif
+
+                    offset = 0;
+
+#if NETSTANDARD2_1
+                    length = await clientSocket.ReceiveAsync(buffer.AsMemory(offset), SocketFlags.None).ConfigureAwait(false);
+#else
+                    length = await clientSocket.ReceiveAsync(new ArraySegment<byte>(buffer, offset, buffer.Length - offset), SocketFlags.None).ConfigureAwait(false);
+#endif
+
+                    request.State++;
                 }
             }
             finally
