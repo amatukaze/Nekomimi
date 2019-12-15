@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Net.Http;
 
 namespace Sakuno.Nekomimi
 {
@@ -55,7 +56,21 @@ namespace Sakuno.Nekomimi
 
                 Debug.Assert(_headers != null);
 
-                return _headers!;
+                return _headers;
+            }
+        }
+
+        private HttpContent? _body;
+        public HttpContent Body
+        {
+            get
+            {
+                if (State <= HttpRequestMessageState.ReadingBody)
+                    throw new InvalidOperationException();
+
+                Debug.Assert(_body != null);
+
+                return _body;
             }
         }
     }

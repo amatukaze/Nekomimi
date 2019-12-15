@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Text;
 
 namespace Sakuno.Nekomimi
@@ -12,6 +13,7 @@ namespace Sakuno.Nekomimi
 
         internal HttpRequestMessageState State { get; set; }
 
+        private Memory<byte> _readingBody;
 
         internal bool ParseStartLineAndHeaders(ReadOnlySpan<byte> data, out int consumed)
         {
@@ -194,9 +196,33 @@ namespace Sakuno.Nekomimi
             return offset + 2;
         }
 
-        private int ParseBody(ReadOnlySpan<byte> data)
+        internal int ReadBody(ReadOnlySpan<byte> data)
         {
-            return 0;
+            if (_body == null)
+            {
+                Debug.Assert(_headers != null);
+
+                if (!_headers.TryGetValue("Content-Length", out var value))
+                    return 0;
+
+                if (!int.TryParse(value, out var contentLength))
+                    throw new BadRequestException();
+
+                var body = new byte[contentLength];
+
+                _readingBody = body;
+                _body = new ByteArrayContent(body);
+            }
+
+            if (_readingBody.IsEmpty)
+                return 0;
+
+            var length = Math.Min(_readingBody.Length, data.Length);
+
+            data.Slice(0, length).CopyTo(_readingBody.Span);
+            _readingBody = _readingBody.Slice(length);
+
+            return _readingBody.Length;
         }
     }
 }

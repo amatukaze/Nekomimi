@@ -69,13 +69,14 @@ namespace Sakuno.Nekomimi
             try
             {
                 var offset = 0;
+                var length = 0;
 
                 while (true)
                 {
 #if NETSTANDARD2_1
-                    var length = await clientSocket.ReceiveAsync(buffer.AsMemory(offset), SocketFlags.None).ConfigureAwait(false);
+                    length = await clientSocket.ReceiveAsync(buffer.AsMemory(offset), SocketFlags.None).ConfigureAwait(false);
 #else
-                    var length = await clientSocket.ReceiveAsync(new ArraySegment<byte>(buffer, offset, buffer.Length - offset), SocketFlags.None).ConfigureAwait(false);
+                    length = await clientSocket.ReceiveAsync(new ArraySegment<byte>(buffer, offset, buffer.Length - offset), SocketFlags.None).ConfigureAwait(false);
 #endif
                     if (request.ParseStartLineAndHeaders(buffer.AsSpan(0, length + offset), out var consumed))
                     {
@@ -161,6 +162,28 @@ namespace Sakuno.Nekomimi
 
                     request.State++;
                 }
+
+                while (true)
+                {
+                    var remaining = request.ReadBody(buffer.AsSpan(offset, length - offset));
+                    if (remaining == 0)
+                    {
+                        request.State++;
+                        break;
+                    }
+
+                    if (offset > 0)
+                        offset = 0;
+
+#if NETSTANDARD2_1
+                    length = await clientSocket.ReceiveAsync(buffer.AsMemory(), SocketFlags.None).ConfigureAwait(false);
+#else
+                    length = await clientSocket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, buffer.Length), SocketFlags.None).ConfigureAwait(false);
+#endif
+                }
+
+                if (request.State != HttpRequestMessageState.MessageParsed)
+                    throw new InvalidOperationException("Impossible suitation");
             }
             finally
             {
