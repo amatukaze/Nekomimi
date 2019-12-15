@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace Sakuno.Nekomimi
 {
@@ -24,7 +25,9 @@ namespace Sakuno.Nekomimi
                 if (State <= HttpRequestMessageState.ParsingRequestUri)
                     throw new InvalidOperationException();
 
-                return _requestUri!;
+                Debug.Assert(_requestUri != null);
+
+                return _requestUri;
             }
         }
 

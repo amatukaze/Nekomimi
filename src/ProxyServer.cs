@@ -30,6 +30,8 @@ namespace Sakuno.Nekomimi
 
         private async Task ListenForConnectionsAsync()
         {
+            Debug.Assert(_listenerSocket != null);
+
             while (true)
             {
                 var clientSocket = await _listenerSocket.AcceptAsync().ConfigureAwait(false);
