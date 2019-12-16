@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Net.Http;
 
@@ -60,8 +60,8 @@ namespace Sakuno.Nekomimi
             }
         }
 
-        private HttpContent? _body;
-        public HttpContent Body
+        private byte[]? _body;
+        public byte[] Body
         {
             get
             {

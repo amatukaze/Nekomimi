@@ -208,10 +208,8 @@ namespace Sakuno.Nekomimi
                 if (!int.TryParse(value, out var contentLength))
                     throw new BadRequestException();
 
-                var body = new byte[contentLength];
-
-                _readingBody = body;
-                _body = new ByteArrayContent(body);
+                _body = new byte[contentLength];
+                _readingBody = _body;
             }
 
             if (_readingBody.IsEmpty)
