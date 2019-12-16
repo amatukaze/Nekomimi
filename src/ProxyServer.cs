@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -12,6 +13,13 @@ namespace Sakuno.Nekomimi
     public class ProxyServer
     {
         private Socket? _listenerSocket;
+
+        private readonly HttpClient _httpClient;
+
+        public ProxyServer()
+        {
+            _httpClient = new HttpClient();
+        }
 
         public void Start(int port)
         {

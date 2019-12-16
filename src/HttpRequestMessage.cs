@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Net.Http;
+using FxHttpRequestMessage = System.Net.Http.HttpRequestMessage;
 
 namespace Sakuno.Nekomimi
 {
@@ -72,6 +73,24 @@ namespace Sakuno.Nekomimi
 
                 return _body;
             }
+        }
+
+
+        internal FxHttpRequestMessage PrepareRequestMessageForHttpClient()
+        {
+            Debug.Assert(_requestUri != null);
+            Debug.Assert(_headers != null);
+
+            var result = new FxHttpRequestMessage(_method.AsFxHttpMethod(), _requestUri) { Version = _version.AsFxVersion() };
+
+            var headers = result.Headers;
+            foreach (var (name, value) in _headers)
+                headers.TryAddWithoutValidation(name, value);
+
+            if (_body != null)
+                result.Content = new ByteArrayContent(_body);
+
+            return result;
         }
     }
 }
