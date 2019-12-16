@@ -59,7 +59,7 @@ namespace Sakuno.Nekomimi
             var clientSocket = (Socket)state;
             var session = new HttpSession();
 
-            await HandleRequestMessage(session.Request, clientSocket);
+            await HandleRequestMessage(session.Request, clientSocket).ConfigureAwait(false);
 
         }
         private async ValueTask HandleRequestMessage(HttpRequestMessage request, Socket clientSocket)
