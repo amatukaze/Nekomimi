@@ -67,7 +67,7 @@ namespace Sakuno.Nekomimi
             var clientSocket = (Socket)state;
             var session = new HttpSession();
 
-            await HandleRequestMessage(session.Request, clientSocket).ConfigureAwait(false);
+            await HandleRequestMessageAsync(session.Request, clientSocket).ConfigureAwait(false);
 
             try
             {
@@ -80,7 +80,7 @@ namespace Sakuno.Nekomimi
 
             Debug.Assert(session.Response != null);
         }
-        private async ValueTask HandleRequestMessage(HttpRequestMessage request, Socket clientSocket)
+        private async ValueTask HandleRequestMessageAsync(HttpRequestMessage request, Socket clientSocket)
         {
             var buffer = ArrayPool<byte>.Shared.Rent(4096);
 
