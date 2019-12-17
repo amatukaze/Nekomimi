@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers;
 using System.Diagnostics;
 using System.Net;
@@ -69,6 +69,16 @@ namespace Sakuno.Nekomimi
 
             await HandleRequestMessage(session.Request, clientSocket).ConfigureAwait(false);
 
+            try
+            {
+                await SendRequestToRemoteHostAsync(session).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                return;
+            }
+
+            Debug.Assert(session.Response != null);
         }
         private async ValueTask HandleRequestMessage(HttpRequestMessage request, Socket clientSocket)
         {
@@ -256,6 +266,29 @@ namespace Sakuno.Nekomimi
             finally
             {
                 ArrayPool<byte>.Shared.Return(buffer, true);
+            }
+        }
+
+        private async ValueTask SendRequestToRemoteHostAsync(HttpSession session)
+        {
+            Debug.Assert(session.Response == null);
+
+            while (session.Response == null)
+            {
+                try
+                {
+                    using var request = session.Request.PrepareRequestMessageForHttpClient();
+                    using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+
+                    session.Response = new HttpResponseMessage(response);
+
+                    if (response.Content != null)
+                    {
+                    }
+                }
+                catch (HttpRequestException innerException)
+                {
+                }
             }
         }
 

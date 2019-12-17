@@ -87,5 +87,14 @@ namespace Sakuno.Nekomimi
             value = kvp.Value;
         }
 #endif
+
+        public static HttpVersion AsHttpVersion(this Version version) => (version.Major, version.Minor) switch
+        {
+            (1, 0) => HttpVersion.Http10,
+            (1, 2) => HttpVersion.Http11,
+            (2, 0) => HttpVersion.Http2,
+
+            _ => throw new InvalidOperationException("Unknown version"),
+        };
     }
 }
