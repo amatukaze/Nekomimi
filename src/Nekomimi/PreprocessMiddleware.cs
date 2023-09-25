@@ -15,10 +15,10 @@ internal sealed class PreprocessMiddleware
     {
         var request = await ParseRequest(context);
 
-        if (request.IsTunnel)
-            throw new NotImplementedException();
+        if (!request.IsTunnel)
+            await next(context);
 
-        await next(context);
+        throw new NotImplementedException();
     }
 
     private async Task<HttpRequest> ParseRequest(ConnectionContext context)
@@ -35,13 +35,13 @@ internal sealed class PreprocessMiddleware
 
             var buffer = result.Buffer;
 
-            if (!ParseBuffer(request, buffer, out var consumed))
-                input.AdvanceTo(buffer.Start, buffer.End);
-            else
+            if (ParseBuffer(request, buffer))
             {
                 input.AdvanceTo(buffer.Start);
                 break;
             }
+
+            input.AdvanceTo(buffer.Start, buffer.End);
 
             if (result.IsCompleted)
                 break;
@@ -49,23 +49,23 @@ internal sealed class PreprocessMiddleware
 
         return request;
 
-        bool ParseBuffer(HttpRequest request, ReadOnlySequence<byte> buffer, out SequencePosition consumed)
+        bool ParseBuffer(HttpRequest request, ReadOnlySequence<byte> buffer)
         {
             var reader = new SequenceReader<byte>(buffer);
 
             if (_httpParser.ParseRequestLine(request, ref reader) && _httpParser.ParseHeaders(request, ref reader))
             {
-                consumed = reader.Position;
+                request.Consumed = reader.Position;
                 return true;
             }
 
-            consumed = default;
             return false;
         }
     }
 
     private sealed class HttpRequest : IHttpRequestLineHandler, IHttpHeadersHandler
     {
+        public SequencePosition Consumed { get; set; }
         public bool IsTunnel { get; private set; }
         public HostString Destination { get; private set; }
 
