@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http;
+using Microsoft.Extensions.Options;
 using System.Buffers;
 using System.Text;
 using KestrelHttpMethod = Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpMethod;
@@ -9,16 +10,36 @@ namespace Sakuno.Nekomimi;
 
 internal sealed class PreprocessMiddleware
 {
+    private static readonly byte[] OkResponse = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\n\r\n");
+
+    private readonly NekomimiOptions _options;
+    private readonly ITunnelConnectionProvider _tunnelConnectionProvider;
     private readonly HttpParser<HttpRequest> _httpParser = new();
+
+    public PreprocessMiddleware(IOptions<NekomimiOptions> options, ITunnelConnectionProvider tunnelConnectionProvider)
+    {
+        _options = options.Value;
+        _tunnelConnectionProvider = tunnelConnectionProvider;
+    }
 
     public async Task HandleAsync(ConnectionContext context, ConnectionDelegate next)
     {
         var request = await ParseRequest(context);
 
         if (!request.IsTunnel)
+        {
             await next(context);
+            return;
+        }
 
-        throw new NotImplementedException();
+        var upstream = await _tunnelConnectionProvider.CreatePipeAsync(request.Destination, context.ConnectionClosed);
+
+        await context.Transport.Output.WriteAsync(OkResponse, context.ConnectionClosed);
+
+        await Task.WhenAny(
+            context.Transport.Input.CopyToAsync(upstream.Output, context.ConnectionClosed),
+            upstream.Input.CopyToAsync(context.Transport.Output, context.ConnectionClosed)
+        );
     }
 
     private async Task<HttpRequest> ParseRequest(ConnectionContext context)
@@ -37,7 +58,7 @@ internal sealed class PreprocessMiddleware
 
             if (ParseBuffer(request, buffer))
             {
-                input.AdvanceTo(buffer.Start);
+                input.AdvanceTo(!request.IsTunnel ? buffer.Start : request.Consumed);
                 break;
             }
 

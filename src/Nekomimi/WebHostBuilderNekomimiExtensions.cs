@@ -1,12 +1,17 @@
 ﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Sakuno.Nekomimi;
 
 public static class WebHostBuilderNekomimiExtensions
 {
     public static IWebHostBuilder UseNekomimi(this IWebHostBuilder builder) =>
-        builder.UseKestrel(options =>
+        builder.ConfigureServices(services =>
+        {
+            services.TryAddSingleton<ITunnelConnectionProvider, TunnelConnectionProvider>();
+        })
+        .UseKestrel(options =>
         {
             options.ConfigureEndpointDefaults(options =>
             {

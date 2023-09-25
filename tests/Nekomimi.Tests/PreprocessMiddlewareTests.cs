@@ -30,4 +30,37 @@ public class PreprocessMiddlewareTests
         using (var response = await client.GetAsync("http://testhost/b"))
             Assert.Equal("Preprocess B", await response.Content.ReadAsStringAsync());
     }
+
+    [Fact]
+    public async Task DirectTunnel()
+    {
+        var upstreamBuilder = WebApplication.CreateBuilder();
+        upstreamBuilder.WebHost.UseUrls("https://127.0.0.1:0");
+
+        await using var upstream = upstreamBuilder.Build();
+        upstream.MapGet("/tunnel", () => "Tunnel Ok");
+
+        await upstream.StartAsync();
+
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseNekomimi().UseUrls("http://127.0.0.1:0");
+
+        await using var host = builder.Build();
+
+        await host.StartAsync();
+
+        using var client = new HttpClient(new SocketsHttpHandler()
+        {
+            UseProxy = true,
+            Proxy = new WebProxy("localhost", host.GetPort()),
+            SslOptions = new()
+            {
+                RemoteCertificateValidationCallback = delegate { return true; },
+            },
+        });
+
+        using var response = await client.GetAsync($"https://localhost:{upstream.GetPort()}/tunnel");
+
+        Assert.Equal("Tunnel Ok", await response.Content.ReadAsStringAsync());
+    }
 }
