@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Connections;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http;
 using Microsoft.Extensions.Options;
@@ -32,9 +32,11 @@ internal sealed class PreprocessMiddleware
             return;
         }
 
-        var upstream = await _tunnelConnectionProvider.CreatePipeAsync(request.Destination, context.ConnectionClosed);
+        var destination = !_options.ReverseProxyEndpoint.HasValue ? request.Destination : _options.ReverseProxyEndpoint;
+        var upstream = await _tunnelConnectionProvider.CreatePipeAsync(destination, context.ConnectionClosed);
 
-        await context.Transport.Output.WriteAsync(OkResponse, context.ConnectionClosed);
+        if (!_options.ReverseProxyEndpoint.HasValue)
+            await context.Transport.Output.WriteAsync(OkResponse, context.ConnectionClosed);
 
         await Task.WhenAny(
             context.Transport.Input.CopyToAsync(upstream.Output, context.ConnectionClosed),
@@ -56,9 +58,13 @@ internal sealed class PreprocessMiddleware
 
             var buffer = result.Buffer;
 
-            if (ParseBuffer(request, buffer))
+            if (ParseBuffer(request, buffer, out var consumed))
             {
-                input.AdvanceTo(!request.IsTunnel ? buffer.Start : request.Consumed);
+                if (!request.IsTunnel || _options.ReverseProxyEndpoint.HasValue)
+                    input.AdvanceTo(buffer.Start);
+                else
+                    input.AdvanceTo(consumed);
+
                 break;
             }
 
@@ -70,23 +76,23 @@ internal sealed class PreprocessMiddleware
 
         return request;
 
-        bool ParseBuffer(HttpRequest request, ReadOnlySequence<byte> buffer)
+        bool ParseBuffer(HttpRequest request, ReadOnlySequence<byte> buffer, out SequencePosition consumed)
         {
             var reader = new SequenceReader<byte>(buffer);
 
             if (_httpParser.ParseRequestLine(request, ref reader) && _httpParser.ParseHeaders(request, ref reader))
             {
-                request.Consumed = reader.Position;
+                consumed = reader.Position;
                 return true;
             }
 
+            consumed = default;
             return false;
         }
     }
 
     private sealed class HttpRequest : IHttpRequestLineHandler, IHttpHeadersHandler
     {
-        public SequencePosition Consumed { get; set; }
         public bool IsTunnel { get; private set; }
         public HostString Destination { get; private set; }
 
