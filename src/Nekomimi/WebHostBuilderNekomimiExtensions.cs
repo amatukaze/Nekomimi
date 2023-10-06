@@ -11,15 +11,7 @@ public static class WebHostBuilderNekomimiExtensions
         {
             services.TryAddSingleton<ITunnelConnectionProvider, TunnelConnectionProvider>();
         })
-        .UseKestrel(options =>
-        {
-            options.ConfigureEndpointDefaults(options =>
-            {
-                var middleware = ActivatorUtilities.GetServiceOrCreateInstance<PreprocessMiddleware>(options.ApplicationServices);
-
-                options.Use(next => context => middleware.HandleAsync(context, next));
-            });
-        });
+        .UseKestrel();
     public static IWebHostBuilder UseNekomimi(this IWebHostBuilder builder, Action<NekomimiOptions> options) =>
         builder.UseNekomimi().ConfigureNekomimi(options);
     public static IWebHostBuilder UseNekomimi(this IWebHostBuilder builder, Action<WebHostBuilderContext, NekomimiOptions> configureOptions) =>

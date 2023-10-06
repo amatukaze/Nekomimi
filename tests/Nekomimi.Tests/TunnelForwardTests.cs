@@ -10,7 +10,7 @@ public class TunnelForwardTests
     public async Task NonTunnel()
     {
         var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseNekomimi().UseUrls("http://127.0.0.1:0");
+        builder.WebHost.UseNekomimiTesting();
 
         await using var host = builder.Build();
         host.MapGet("/a", () => "Preprocess A");
@@ -43,7 +43,7 @@ public class TunnelForwardTests
         await upstream.StartAsync();
 
         var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseNekomimi().UseUrls("http://127.0.0.1:0");
+        builder.WebHost.UseNekomimi().UseNekomimiTesting();
 
         await using var host = builder.Build();
 
@@ -76,7 +76,7 @@ public class TunnelForwardTests
         await upstream.StartAsync();
 
         var builder1 = WebApplication.CreateBuilder();
-        builder1.WebHost.UseNekomimi().UseUrls("http://127.0.0.1:0");
+        builder1.WebHost.UseNekomimi().UseNekomimiTesting();
 
         await using var host1 = builder1.Build();
 
@@ -84,10 +84,10 @@ public class TunnelForwardTests
 
         var reverseProxyPort = host1.GetPort();
         var builder2 = WebApplication.CreateBuilder();
-        builder2.WebHost.UseNekomimi(options =>
+        builder2.WebHost.UseNekomimiTesting(options =>
         {
             options.ReverseProxyEndpoint = new("localhost", reverseProxyPort);
-        }).UseUrls("http://127.0.0.1:0");
+        });
 
         await using var host2 = builder2.Build();
 

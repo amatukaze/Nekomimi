@@ -1,12 +1,29 @@
-﻿using Microsoft.AspNetCore.Hosting.Server;
+﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Net;
 
 namespace Sakuno.Nekomimi.Tests;
 
 internal static class Extensions
 {
+    public static IWebHostBuilder UseNekomimiTesting(this IWebHostBuilder builder) =>
+        builder.UseNekomimiTesting(delegate { });
+    public static IWebHostBuilder UseNekomimiTesting(this IWebHostBuilder builder, Action<NekomimiOptions> options)
+    {
+        builder.UseNekomimi(options).ConfigureKestrel(options =>
+        {
+            options.Listen(IPAddress.Loopback, 0, listenOptions =>
+            {
+                listenOptions.UseNekomimiPreprocessMiddleware();
+            });
+        });
+
+        return builder;
+    }
+
     public static int GetPort(this IHost host)
     {
         var server = host.Services.GetRequiredService<IServer>();
