@@ -4,7 +4,7 @@ using System.Net;
 
 namespace Sakuno.Nekomimi.Tests;
 
-public class PreprocessMiddlewareTests
+public class TunnelForwardTests
 {
     [Fact]
     public async Task NonTunnel()
