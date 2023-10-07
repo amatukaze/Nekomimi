@@ -18,6 +18,7 @@ internal static class Extensions
             options.Listen(IPAddress.Loopback, 0, listenOptions =>
             {
                 listenOptions.UseNekomimiPreprocessMiddleware();
+                listenOptions.UseNekomimiTunnelForwardMiddleware();
             });
         });
 

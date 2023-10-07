@@ -10,38 +10,22 @@ namespace Sakuno.Nekomimi;
 
 internal sealed class PreprocessMiddleware
 {
-    private static readonly byte[] OkResponse = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\n\r\n");
-
-    private readonly NekomimiOptions _options;
-    private readonly ITunnelConnectionProvider _tunnelConnectionProvider;
     private readonly HttpParser<HttpRequest> _httpParser = new();
 
-    public PreprocessMiddleware(IOptions<NekomimiOptions> options, ITunnelConnectionProvider tunnelConnectionProvider)
+    private readonly NekomimiOptions _options;
+
+    public PreprocessMiddleware(IOptions<NekomimiOptions> options)
     {
         _options = options.Value;
-        _tunnelConnectionProvider = tunnelConnectionProvider;
     }
 
     public async Task HandleAsync(ConnectionContext context, ConnectionDelegate next)
     {
         var request = await ParseRequest(context);
 
-        if (!request.IsTunnel)
-        {
-            await next(context);
-            return;
-        }
+        context.Features.Set<INekomimiContextFeature>(request);
 
-        var destination = !_options.ReverseProxyEndpoint.HasValue ? request.Destination : _options.ReverseProxyEndpoint;
-        var upstream = await _tunnelConnectionProvider.CreatePipeAsync(destination, context.ConnectionClosed);
-
-        if (!_options.ReverseProxyEndpoint.HasValue)
-            await context.Transport.Output.WriteAsync(OkResponse, context.ConnectionClosed);
-
-        await Task.WhenAny(
-            context.Transport.Input.CopyToAsync(upstream.Output, context.ConnectionClosed),
-            upstream.Input.CopyToAsync(context.Transport.Output, context.ConnectionClosed)
-        );
+        await next(context);
     }
 
     private async Task<HttpRequest> ParseRequest(ConnectionContext context)
@@ -91,7 +75,7 @@ internal sealed class PreprocessMiddleware
         }
     }
 
-    private sealed class HttpRequest : IHttpRequestLineHandler, IHttpHeadersHandler
+    private sealed class HttpRequest : IHttpRequestLineHandler, IHttpHeadersHandler, INekomimiContextFeature
     {
         public bool IsTunnel { get; private set; }
         public HostString Destination { get; private set; }

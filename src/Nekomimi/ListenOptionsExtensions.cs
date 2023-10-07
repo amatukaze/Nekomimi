@@ -11,4 +11,10 @@ public static class ListenOptionsExtensions
 
         options.Use(next => context => middleware.HandleAsync(context, next));
     }
+    public static void UseNekomimiTunnelForwardMiddleware(this ListenOptions options)
+    {
+        var middleware = ActivatorUtilities.GetServiceOrCreateInstance<TunnelForwardMiddleware>(options.ApplicationServices);
+
+        options.Use(next => context => middleware.HandleAsync(context, next));
+    }
 }
