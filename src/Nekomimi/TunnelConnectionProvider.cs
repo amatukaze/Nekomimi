@@ -7,14 +7,10 @@ using System.Net.Sockets;
 
 namespace Sakuno.Nekomimi;
 
-internal sealed class TunnelConnectionProvider : ITunnelConnectionProvider, IDisposable
+internal sealed class TunnelConnectionProvider(IOptions<SocketConnectionFactoryOptions> options, ILogger<TunnelConnectionProvider> logger)
+    : ITunnelConnectionProvider, IDisposable
 {
-    private readonly SocketConnectionContextFactory _factory;
-
-    public TunnelConnectionProvider(IOptions<SocketConnectionFactoryOptions> options, ILogger<TunnelConnectionProvider> logger)
-    {
-        _factory = new SocketConnectionContextFactory(options.Value, logger);
-    }
+    private readonly SocketConnectionContextFactory _factory = new(options.Value, logger);
 
     public async ValueTask<IDuplexPipe> CreatePipeAsync(HostString destionation, CancellationToken cancellationToken)
     {

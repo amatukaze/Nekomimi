@@ -4,18 +4,11 @@ using System.Text;
 
 namespace Sakuno.Nekomimi;
 
-internal sealed class TunnelForwardMiddleware
+internal sealed class TunnelForwardMiddleware(IOptions<NekomimiOptions> options, ITunnelConnectionProvider tunnelConnectionProvider)
 {
     private static readonly byte[] OkResponse = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\n\r\n");
 
-    private readonly NekomimiOptions _options;
-    private readonly ITunnelConnectionProvider _tunnelConnectionProvider;
-
-    public TunnelForwardMiddleware(IOptions<NekomimiOptions> options, ITunnelConnectionProvider tunnelConnectionProvider)
-    {
-        _options = options.Value;
-        _tunnelConnectionProvider = tunnelConnectionProvider;
-    }
+    private readonly NekomimiOptions _options = options.Value;
 
     public Task HandleAsync(ConnectionContext context, ConnectionDelegate next)
     {
@@ -29,7 +22,7 @@ internal sealed class TunnelForwardMiddleware
     private async Task ForwardCoreAsync(ConnectionContext context, INekomimiContextFeature request)
     {
         var destination = !_options.ReverseProxyEndpoint.HasValue ? request.Destination : _options.ReverseProxyEndpoint;
-        var upstream = await _tunnelConnectionProvider.CreatePipeAsync(destination, context.ConnectionClosed);
+        var upstream = await tunnelConnectionProvider.CreatePipeAsync(destination, context.ConnectionClosed);
 
         if (!_options.ReverseProxyEndpoint.HasValue)
             await context.Transport.Output.WriteAsync(OkResponse, context.ConnectionClosed);

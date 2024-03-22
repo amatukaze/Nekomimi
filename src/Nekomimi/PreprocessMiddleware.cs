@@ -8,16 +8,11 @@ using KestrelHttpMethod = Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http
 
 namespace Sakuno.Nekomimi;
 
-internal sealed class PreprocessMiddleware
+internal sealed class PreprocessMiddleware(IOptions<NekomimiOptions> options)
 {
     private readonly HttpParser<HttpRequest> _httpParser = new();
 
-    private readonly NekomimiOptions _options;
-
-    public PreprocessMiddleware(IOptions<NekomimiOptions> options)
-    {
-        _options = options.Value;
-    }
+    private readonly NekomimiOptions _options = options.Value;
 
     public async Task HandleAsync(ConnectionContext context, ConnectionDelegate next)
     {
