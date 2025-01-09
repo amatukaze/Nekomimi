@@ -1,0 +1,11 @@
+﻿<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="tests\Nekomimi.Tests\Nekomimi.Tests.csproj" />
+  </Folder>
+  <Project Path="src\Nekomimi\Nekomimi.csproj" />
+</Solution>
