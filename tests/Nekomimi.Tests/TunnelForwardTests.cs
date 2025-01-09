@@ -9,7 +9,7 @@ public class TunnelForwardTests
     [Fact]
     public async Task NonTunnel()
     {
-        var builder = WebApplication.CreateBuilder();
+        var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseNekomimiTesting();
 
         await using var host = builder.Build();
@@ -34,15 +34,16 @@ public class TunnelForwardTests
     [Fact]
     public async Task DirectTunnel()
     {
-        var upstreamBuilder = WebApplication.CreateBuilder();
+        var upstreamBuilder = WebApplication.CreateSlimBuilder();
         upstreamBuilder.WebHost.UseUrls("https://127.0.0.1:0");
+        upstreamBuilder.WebHost.UseKestrelHttpsConfiguration();
 
         await using var upstream = upstreamBuilder.Build();
         upstream.MapGet("/tunnel", () => "Tunnel Ok");
 
         await upstream.StartAsync(TestContext.Current.CancellationToken);
 
-        var builder = WebApplication.CreateBuilder();
+        var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseNekomimi().UseNekomimiTesting();
 
         await using var host = builder.Build();
@@ -67,15 +68,16 @@ public class TunnelForwardTests
     [Fact]
     public async Task TunnelViaUpstreamReverseProxy()
     {
-        var upstreamBuilder = WebApplication.CreateBuilder();
+        var upstreamBuilder = WebApplication.CreateSlimBuilder();
         upstreamBuilder.WebHost.UseUrls("https://127.0.0.1:0");
+        upstreamBuilder.WebHost.UseKestrelHttpsConfiguration();
 
         await using var upstream = upstreamBuilder.Build();
         upstream.MapGet("/tunnel", () => "Tunnel Ok");
 
         await upstream.StartAsync(TestContext.Current.CancellationToken);
 
-        var builder1 = WebApplication.CreateBuilder();
+        var builder1 = WebApplication.CreateSlimBuilder();
         builder1.WebHost.UseNekomimi().UseNekomimiTesting();
 
         await using var host1 = builder1.Build();
@@ -83,7 +85,7 @@ public class TunnelForwardTests
         await host1.StartAsync(TestContext.Current.CancellationToken);
 
         var reverseProxyPort = host1.GetPort();
-        var builder2 = WebApplication.CreateBuilder();
+        var builder2 = WebApplication.CreateSlimBuilder();
         builder2.WebHost.UseNekomimiTesting(options =>
         {
             options.ReverseProxyEndpoint = new("localhost", reverseProxyPort);
