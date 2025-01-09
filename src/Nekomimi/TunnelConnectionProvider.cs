@@ -12,11 +12,11 @@ internal sealed class TunnelConnectionProvider(IOptions<SocketConnectionFactoryO
 {
     private readonly SocketConnectionContextFactory _factory = new(options.Value, logger);
 
-    public async ValueTask<IDuplexPipe> CreatePipeAsync(HostString destionation, CancellationToken cancellationToken)
+    public async ValueTask<IDuplexPipe> CreatePipeAsync(HostString destination, CancellationToken cancellationToken)
     {
         var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
 
-        await socket.ConnectAsync(destionation.Host, destionation.Port.GetValueOrDefault(), cancellationToken);
+        await socket.ConnectAsync(destination.Host, destination.Port.GetValueOrDefault(), cancellationToken);
 
         return _factory.Create(socket).Transport;
     }

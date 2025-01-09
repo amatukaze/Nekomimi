@@ -5,5 +5,5 @@ namespace Sakuno.Nekomimi;
 
 public interface ITunnelConnectionProvider
 {
-    ValueTask<IDuplexPipe> CreatePipeAsync(HostString destionation, CancellationToken cancellationToken);
+    ValueTask<IDuplexPipe> CreatePipeAsync(HostString destination, CancellationToken cancellationToken);
 }
