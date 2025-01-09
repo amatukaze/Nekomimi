@@ -16,7 +16,7 @@ public class TunnelForwardTests
         host.MapGet("/a", () => "Preprocess A");
         host.MapGet("/b", () => "Preprocess B");
 
-        await host.StartAsync();
+        await host.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = new HttpClient(new SocketsHttpHandler()
         {
@@ -24,11 +24,11 @@ public class TunnelForwardTests
             Proxy = new WebProxy("localhost", host.GetPort()),
         });
 
-        using (var response = await client.GetAsync("http://testhost/a"))
-            Assert.Equal("Preprocess A", await response.Content.ReadAsStringAsync());
+        using (var response = await client.GetAsync("http://testhost/a", TestContext.Current.CancellationToken))
+            Assert.Equal("Preprocess A", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
-        using (var response = await client.GetAsync("http://testhost/b"))
-            Assert.Equal("Preprocess B", await response.Content.ReadAsStringAsync());
+        using (var response = await client.GetAsync("http://testhost/b", TestContext.Current.CancellationToken))
+            Assert.Equal("Preprocess B", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -40,14 +40,14 @@ public class TunnelForwardTests
         await using var upstream = upstreamBuilder.Build();
         upstream.MapGet("/tunnel", () => "Tunnel Ok");
 
-        await upstream.StartAsync();
+        await upstream.StartAsync(TestContext.Current.CancellationToken);
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseNekomimi().UseNekomimiTesting();
 
         await using var host = builder.Build();
 
-        await host.StartAsync();
+        await host.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = new HttpClient(new SocketsHttpHandler()
         {
@@ -59,9 +59,9 @@ public class TunnelForwardTests
             },
         });
 
-        using var response = await client.GetAsync($"https://localhost:{upstream.GetPort()}/tunnel");
+        using var response = await client.GetAsync($"https://localhost:{upstream.GetPort()}/tunnel", TestContext.Current.CancellationToken);
 
-        Assert.Equal("Tunnel Ok", await response.Content.ReadAsStringAsync());
+        Assert.Equal("Tunnel Ok", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -73,14 +73,14 @@ public class TunnelForwardTests
         await using var upstream = upstreamBuilder.Build();
         upstream.MapGet("/tunnel", () => "Tunnel Ok");
 
-        await upstream.StartAsync();
+        await upstream.StartAsync(TestContext.Current.CancellationToken);
 
         var builder1 = WebApplication.CreateBuilder();
         builder1.WebHost.UseNekomimi().UseNekomimiTesting();
 
         await using var host1 = builder1.Build();
 
-        await host1.StartAsync();
+        await host1.StartAsync(TestContext.Current.CancellationToken);
 
         var reverseProxyPort = host1.GetPort();
         var builder2 = WebApplication.CreateBuilder();
@@ -91,7 +91,7 @@ public class TunnelForwardTests
 
         await using var host2 = builder2.Build();
 
-        await host2.StartAsync();
+        await host2.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = new HttpClient(new SocketsHttpHandler()
         {
@@ -103,8 +103,8 @@ public class TunnelForwardTests
             },
         });
 
-        using var response = await client.GetAsync($"https://localhost:{upstream.GetPort()}/tunnel");
+        using var response = await client.GetAsync($"https://localhost:{upstream.GetPort()}/tunnel", TestContext.Current.CancellationToken);
 
-        Assert.Equal("Tunnel Ok", await response.Content.ReadAsStringAsync());
+        Assert.Equal("Tunnel Ok", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 }
