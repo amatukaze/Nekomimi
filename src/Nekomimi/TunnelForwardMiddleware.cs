@@ -2,8 +2,8 @@
 using System.Net.Security;
 using System.Net.Sockets;
 using Microsoft.AspNetCore.Connections;
-using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Options;
 
 namespace Sakuno.Nekomimi;
 

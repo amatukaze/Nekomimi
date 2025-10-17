@@ -1,6 +1,6 @@
+using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using System.Net;
 
 namespace Sakuno.Nekomimi.Tests;
 

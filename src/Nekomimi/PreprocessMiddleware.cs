@@ -1,9 +1,9 @@
+using System.Buffers;
+using System.Text;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http;
 using Microsoft.Extensions.Options;
-using System.Buffers;
-using System.Text;
 using KestrelHttpMethod = Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http.HttpMethod;
 
 namespace Sakuno.Nekomimi;
