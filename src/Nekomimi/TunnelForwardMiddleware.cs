@@ -18,10 +18,16 @@ internal sealed class TunnelForwardMiddleware(IOptions<NekomimiOptions> options)
         if (request is not { IsTunnel: true })
             return next(context);
 
-        return ForwardCoreAsync(context, request);
+        return ForwardCoreAsync(context, next, request);
     }
-    private async Task ForwardCoreAsync(ConnectionContext context, INekomimiContextFeature request)
+    private async Task ForwardCoreAsync(ConnectionContext context, ConnectionDelegate next, INekomimiContextFeature request)
     {
+        if (await DetermineHttpRequestLineAsync(context))
+        {
+            await next(context);
+            return;
+        }
+
         var destination = !_options.ReverseProxyEndpoint.HasValue ? request.Destination : _options.ReverseProxyEndpoint;
 
         using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
@@ -42,5 +48,29 @@ internal sealed class TunnelForwardMiddleware(IOptions<NekomimiOptions> options)
         await Task.WhenAny(
             stream.CopyToAsync(context.Transport.Output, context.ConnectionClosed),
             context.Transport.Input.CopyToAsync(stream, context.ConnectionClosed));
+    }
+
+    private async ValueTask<bool> DetermineHttpRequestLineAsync(ConnectionContext context)
+    {
+        var input = context.Transport.Input;
+        var readResult = await input.ReadAsync(context.ConnectionClosed);
+
+        var result = CheckCore(readResult.Buffer.FirstSpan);
+
+        input.AdvanceTo(readResult.Buffer.Start);
+
+        return result;
+
+        static bool CheckCore(ReadOnlySpan<byte> input)
+        {
+            var index = input.IndexOf("\r\n"u8);
+            if (index is -1)
+                return false;
+
+            var requestLine = input[..index];
+
+            return requestLine.EndsWith(" HTTP/2.0"u8) ||
+                   requestLine.EndsWith(" HTTP/1.1"u8);
+        }
     }
 }
