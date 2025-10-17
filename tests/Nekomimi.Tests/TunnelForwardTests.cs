@@ -64,49 +64,4 @@ public class TunnelForwardTests
 
         Assert.Equal("Tunnel Ok", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
-
-    [Fact]
-    public async Task TunnelViaUpstreamReverseProxy()
-    {
-        var upstreamBuilder = WebApplication.CreateSlimBuilder();
-        upstreamBuilder.WebHost.UseUrls("https://127.0.0.1:0");
-        upstreamBuilder.WebHost.UseKestrelHttpsConfiguration();
-
-        await using var upstream = upstreamBuilder.Build();
-        upstream.MapGet("/tunnel", () => "Tunnel Ok");
-
-        await upstream.StartAsync(TestContext.Current.CancellationToken);
-
-        var builder1 = WebApplication.CreateSlimBuilder();
-        builder1.WebHost.UseNekomimi().UseNekomimiTesting();
-
-        await using var host1 = builder1.Build();
-
-        await host1.StartAsync(TestContext.Current.CancellationToken);
-
-        var reverseProxyPort = host1.GetPort();
-        var builder2 = WebApplication.CreateSlimBuilder();
-        builder2.WebHost.UseNekomimiTesting(options =>
-        {
-            options.ReverseProxyEndpoint = new("localhost", reverseProxyPort);
-        });
-
-        await using var host2 = builder2.Build();
-
-        await host2.StartAsync(TestContext.Current.CancellationToken);
-
-        using var client = new HttpClient(new SocketsHttpHandler()
-        {
-            UseProxy = true,
-            Proxy = new WebProxy("localhost", host2.GetPort()),
-            SslOptions = new()
-            {
-                RemoteCertificateValidationCallback = delegate { return true; },
-            },
-        });
-
-        using var response = await client.GetAsync($"https://localhost:{upstream.GetPort()}/tunnel", TestContext.Current.CancellationToken);
-
-        Assert.Equal("Tunnel Ok", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-    }
 }

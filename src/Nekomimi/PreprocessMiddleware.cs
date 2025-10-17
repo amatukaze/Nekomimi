@@ -10,6 +10,8 @@ namespace Sakuno.Nekomimi;
 
 internal sealed class PreprocessMiddleware(IOptions<NekomimiOptions> options)
 {
+    private static readonly byte[] OkResponse = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\n\r\n");
+
     private readonly HttpParser<HttpRequest> _httpParser = new();
 
     private readonly NekomimiOptions _options = options.Value;
@@ -27,6 +29,7 @@ internal sealed class PreprocessMiddleware(IOptions<NekomimiOptions> options)
     {
         var request = new HttpRequest();
         var input = context.Transport.Input;
+        var output = context.Transport.Output;
 
         while (true)
         {
@@ -39,10 +42,14 @@ internal sealed class PreprocessMiddleware(IOptions<NekomimiOptions> options)
 
             if (ParseBuffer(request, buffer, out var consumed))
             {
-                if (!request.IsTunnel || _options.ReverseProxyEndpoint.HasValue)
+                if (!request.IsTunnel)
                     input.AdvanceTo(buffer.Start);
                 else
+                {
                     input.AdvanceTo(consumed);
+
+                    await output.WriteAsync(OkResponse, context.ConnectionClosed);
+                }
 
                 break;
             }

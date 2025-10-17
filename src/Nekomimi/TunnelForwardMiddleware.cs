@@ -1,13 +1,14 @@
-﻿using Microsoft.AspNetCore.Connections;
+﻿using System.IO.Pipelines;
+using System.Net.Security;
+using System.Net.Sockets;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.Extensions.Options;
-using System.Text;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace Sakuno.Nekomimi;
 
-internal sealed class TunnelForwardMiddleware(IOptions<NekomimiOptions> options, ITunnelConnectionProvider tunnelConnectionProvider)
+internal sealed class TunnelForwardMiddleware(IOptions<NekomimiOptions> options)
 {
-    private static readonly byte[] OkResponse = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\n\r\n");
-
     private readonly NekomimiOptions _options = options.Value;
 
     public Task HandleAsync(ConnectionContext context, ConnectionDelegate next)
@@ -22,14 +23,24 @@ internal sealed class TunnelForwardMiddleware(IOptions<NekomimiOptions> options,
     private async Task ForwardCoreAsync(ConnectionContext context, INekomimiContextFeature request)
     {
         var destination = !_options.ReverseProxyEndpoint.HasValue ? request.Destination : _options.ReverseProxyEndpoint;
-        var upstream = await tunnelConnectionProvider.CreatePipeAsync(destination, context.ConnectionClosed);
 
-        if (!_options.ReverseProxyEndpoint.HasValue)
-            await context.Transport.Output.WriteAsync(OkResponse, context.ConnectionClosed);
+        using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+
+        await socket.ConnectAsync(destination.Host, destination.Port.GetValueOrDefault(), context.ConnectionClosed);
+
+        Stream stream = new NetworkStream(socket, ownsSocket: false);
+
+        if (context.Features.Get<ITlsConnectionFeature>() is not null)
+        {
+            var sslStream = new SslStream(stream, leaveInnerStreamOpen: true);
+
+            await sslStream.AuthenticateAsClientAsync(destination.Host);
+
+            stream = sslStream;
+        }
 
         await Task.WhenAny(
-            context.Transport.Input.CopyToAsync(upstream.Output, context.ConnectionClosed),
-            upstream.Input.CopyToAsync(context.Transport.Output, context.ConnectionClosed)
-        );
+            stream.CopyToAsync(context.Transport.Output, context.ConnectionClosed),
+            context.Transport.Input.CopyToAsync(stream, context.ConnectionClosed));
     }
 }
