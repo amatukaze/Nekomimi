@@ -79,7 +79,7 @@ internal sealed class ProxyHandshakeMiddleware(IOptions<NekomimiOptions> options
 
     private sealed class HttpRequest : IHttpRequestLineHandler, IHttpHeadersHandler, INekomimiContextFeature
     {
-        public bool IsTunnel { get; private set; }
+        public bool IsTunnel { get; set; }
         public HostString Destination { get; private set; }
 
         void IHttpRequestLineHandler.OnStartLine(HttpVersionAndMethod versionAndMethod, TargetOffsetPathLength targetPath, Span<byte> startLine)

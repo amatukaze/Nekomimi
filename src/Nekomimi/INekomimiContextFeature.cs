@@ -4,6 +4,6 @@ namespace Sakuno.Nekomimi;
 
 internal interface INekomimiContextFeature
 {
-    bool IsTunnel { get; }
+    bool IsTunnel { get; set; }
     HostString Destination { get; }
 }
