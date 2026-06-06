@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace Sakuno.Nekomimi;
 
-internal sealed class TunnelForwardMiddleware(IOptions<NekomimiOptions> options)
+internal sealed class TunnelRelayMiddleware(IOptions<NekomimiOptions> options)
 {
     private readonly NekomimiOptions _options = options.Value;
 

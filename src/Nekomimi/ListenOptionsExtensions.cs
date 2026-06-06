@@ -9,23 +9,23 @@ public static class ListenOptionsExtensions
 {
     public static void UseNekomimi(this ListenOptions options, Action<HttpsConnectionAdapterOptions>? httpsConfigure = null)
     {
-        options.UsePreprocessMiddleware();
+        options.UseProxyHandshakeMiddleware();
 
         if (httpsConfigure is not null)
             options.UseHttps(httpsConfigure);
 
-        options.UseTunnelForwardMiddleware();
+        options.UseTunnelRelayMiddleware();
     }
 
-    private static void UsePreprocessMiddleware(this ListenOptions options)
+    private static void UseProxyHandshakeMiddleware(this ListenOptions options)
     {
-        var middleware = ActivatorUtilities.GetServiceOrCreateInstance<PreprocessMiddleware>(options.ApplicationServices);
+        var middleware = ActivatorUtilities.GetServiceOrCreateInstance<ProxyHandshakeMiddleware>(options.ApplicationServices);
 
         options.Use(next => context => middleware.HandleAsync(context, next));
     }
-    private static void UseTunnelForwardMiddleware(this ListenOptions options)
+    private static void UseTunnelRelayMiddleware(this ListenOptions options)
     {
-        var middleware = ActivatorUtilities.GetServiceOrCreateInstance<TunnelForwardMiddleware>(options.ApplicationServices);
+        var middleware = ActivatorUtilities.GetServiceOrCreateInstance<TunnelRelayMiddleware>(options.ApplicationServices);
 
         options.Use(next => context => middleware.HandleAsync(context, next));
     }

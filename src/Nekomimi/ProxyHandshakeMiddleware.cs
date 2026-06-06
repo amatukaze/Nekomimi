@@ -8,7 +8,7 @@ using KestrelHttpMethod = Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http
 
 namespace Sakuno.Nekomimi;
 
-internal sealed class PreprocessMiddleware(IOptions<NekomimiOptions> options)
+internal sealed class ProxyHandshakeMiddleware(IOptions<NekomimiOptions> options)
 {
     private static readonly byte[] OkResponse = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\n\r\n");
 
