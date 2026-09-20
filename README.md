@@ -51,4 +51,4 @@ app.Run();
 
 ## Licence
 
-[MIT License (MIT)](./LICENSE.md)
+[MIT License (MIT)](./LICENSE)
