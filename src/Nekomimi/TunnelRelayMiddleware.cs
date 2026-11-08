@@ -33,7 +33,11 @@ internal sealed class TunnelRelayMiddleware(IOptions<NekomimiOptions> options)
         {
             var sslStream = new SslStream(stream, leaveInnerStreamOpen: true);
 
-            await sslStream.AuthenticateAsClientAsync(destination.Host);
+            await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+            {
+                TargetHost = destination.Host,
+                RemoteCertificateValidationCallback = _options.UpstreamCertificateValidationCallback,
+            }, context.ConnectionClosed);
 
             stream = sslStream;
         }
