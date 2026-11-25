@@ -1,9 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project>
 
-    <PropertyGroup Label="BasePath">
-        <BasePath>$(MSBuildThisFileDirectory)</BasePath>
-        <MinimumVisualStudioVersion>17</MinimumVisualStudioVersion>
-    </PropertyGroup>
+  <PropertyGroup Label="BasePath">
+    <BasePath>$(MSBuildThisFileDirectory)</BasePath>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
 
 </Project>
